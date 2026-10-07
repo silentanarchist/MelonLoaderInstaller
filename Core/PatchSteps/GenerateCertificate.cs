@@ -1,4 +1,4 @@
-﻿using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
@@ -46,6 +46,16 @@ IAE6kTSMMHC6bVbrbS/CC8hRW8m7yD3LUa1EjFJmRWXsCQ==
 
     public bool Run(Patcher patcher)
     {
+        // Warpforge Revival change: keep one signing key between runs (path given in LEMON_SIGNING_KEY),
+        // so a re-patched game installs over the previous patched copy instead of being refused.
+        string? keyFile = Environment.GetEnvironmentVariable("LEMON_SIGNING_KEY");
+        if (!string.IsNullOrEmpty(keyFile) && File.Exists(keyFile))
+        {
+            patcher.Logger.Log("Using the saved signing key");
+            patcher.Info.PemData = File.ReadAllText(keyFile);
+            return true;
+        }
+
         patcher.Logger.Log("Generating certificate");
 
         RsaKeyPairGenerator kpg = new();
@@ -84,6 +94,11 @@ IAE6kTSMMHC6bVbrbS/CC8hRW8m7yD3LUa1EjFJmRWXsCQ==
         pemWriter.WriteObject(new Org.BouncyCastle.Utilities.IO.Pem.PemObject("CERTIFICATE", certificate.GetEncoded()));
         pemWriter.WriteObject(keyPair.Private);
         patcher.Info.PemData = stringWriter.ToString();
+        if (!string.IsNullOrEmpty(keyFile))
+        {
+            try { File.WriteAllText(keyFile, patcher.Info.PemData); patcher.Logger.Log("Signing key saved for next time"); }
+            catch (Exception e) { patcher.Logger.Log("Could not save the signing key: " + e.Message); }
+        }
 
         patcher.Logger.Log("Done");
 

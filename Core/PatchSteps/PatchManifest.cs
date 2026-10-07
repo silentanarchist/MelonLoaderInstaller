@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -98,6 +98,18 @@ internal class PatchManifest : IPatchStep
         {
             _logger!.Log("Adding legacy external storage flag");
             appElement.Attributes.Add(new("requestLegacyExternalStorage", AndroidNamespaceUri, LegacyStorageAttributeResourceId, true));
+        }
+
+        // Warpforge Revival change: turn off heap pointer tagging. Newer phones tag the top byte of
+        // heap pointers; the loader's runtime drops that byte in places, and the system then aborts
+        // the app ("Pointer tag ... was truncated"). 16844306 = android:allowNativeHeapPointerTagging.
+        AxmlAttribute? tagging = appElement.Attributes.FirstOrDefault(attribute => attribute.Name == "allowNativeHeapPointerTagging");
+        if (tagging != null)
+            tagging.Value = false;
+        else
+        {
+            _logger!.Log("Turning off heap pointer tagging");
+            appElement.Attributes.Add(new("allowNativeHeapPointerTagging", AndroidNamespaceUri, 16844306, false));
         }
 
         // This has only been an issue for split APKs
