@@ -12,14 +12,6 @@ the phone (or from the player's own `.apks` / `.xapk` backup). The app downloads
 commit pinned in `LoaderPackage.cs`, checked against a pinned SHA-256, and the mod from the revival
 server. A new loader needs a new app build with the new commit and checksum.
 
-**Export the game's downloaded files.** Removing the game erases `Android/data/com.Everguild.WarhammerWarpforge/files`,
-which cannot be downloaded again. When the app can see those files it offers **Export the game's
-downloaded files (backup)**, which copies them to `Download/Warpforge game files backup <date>/` (every
-size checked). It can see them on Android 10 and older directly, and on Android 11 and 12 after the
-player grants the game's folder once in Android's picker. Android 13 and newer show no app another app's
-`Android/data`, so there only a PC can copy them, or a copy the mod makes in
-`UserData/WarpforgeRevival/original-cache` (the Android mod does not make one yet).
-
 ## How it patches
 
 It runs **the same patching core as `LemonPatch.exe`** (`../Core`, this fork's LemonLoader installer
@@ -50,11 +42,8 @@ test APK); peak memory for the large file went from out-of-memory to about 50 MB
    else `warpforge.silentanarchist.com`, always over https on port 8780.
 5. Patches with the core.
 6. If the installed game is not signed with this app's key (the store original, or a PC-patched copy),
-   it must be removed, which **erases the game's downloaded files
-   (`Android/data/com.Everguild.WarhammerWarpforge/files`), and they cannot be downloaded again**. The
-   app says so before it starts patching and goes on only when the player confirms having copied that
-   folder off with a PC (no app can read it on Android 11+), then removes the game through Android's own
-   uninstall prompt. Account and progress are on the server; the `MelonLoader` folder stays.
+   asks before patching, then removes it through Android's own uninstall prompt. Its downloaded files
+   come back from the revival server; account and progress are on the server; the `MelonLoader` folder stays.
 7. Installs the patched APKs together through a `PackageInstaller` session (Android asks to confirm).
 8. Puts the mod in `MelonLoader/com.Everguild.WarhammerWarpforge/Mods/` (older test files moved aside
    like the PC script), and, with the box ticked, the Still picture in

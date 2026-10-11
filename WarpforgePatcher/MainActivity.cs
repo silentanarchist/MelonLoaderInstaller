@@ -16,11 +16,11 @@ namespace WarpforgePatcher;
           ScreenOrientation = ScreenOrientation.Portrait)]
 public class MainActivity : Activity, IPatchLogger
 {
-    private const int PickBackup = 1, SaveKey = 2, LoadKey = 3, GrantCache = 4;
+    private const int PickBackup = 1, SaveKey = 2, LoadKey = 3;
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
-    private Button exportCache = null!, grantCache = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    private Button allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -63,8 +63,6 @@ public class MainActivity : Activity, IPatchLogger
         top.AddView(status);
 
         allowFiles = Btn("Allow access to the loader's folder", () => AskFilesAccess());
-        grantCache = Btn("Let this app see the game's downloaded files", () => StartActivityForResult(CacheBackup.GrantIntent(), GrantCache));
-        exportCache = Btn("Export the game's downloaded files (backup)", () => _ = ExportCache());
         allowInstall = Btn("Allow this app to install the game", () => AskInstallAccess());
         still = new CheckBox(this) { Text = "Fix black menu after loading (shows a still picture instead of the loading video)" };
         still.SetTextColor(Color.ParseColor("#E6E6E6"));
@@ -76,7 +74,7 @@ public class MainActivity : Activity, IPatchLogger
         saveKey = Btn("Save a copy of the signing key", () => PickFile(SaveKey, "application/x-pem-file", "warpforge-patcher-key.pem"));
         loadKey = Btn("Load a saved signing key", () => PickFile(LoadKey, "*/*", null));
 
-        foreach (var v in new View[] { allowFiles, allowInstall, grantCache, exportCache, still, patch, fromBackup, modOnly, shareLogs, saveKey, loadKey }) top.AddView(v);
+        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, shareLogs, saveKey, loadKey }) top.AddView(v);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
         root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 3f));
@@ -187,7 +185,7 @@ public class MainActivity : Activity, IPatchLogger
         else
         {
             lines.Add($"Game: version {game.Version}" + (game.Patched ? ", patched" + (game.PatchDate.Length > 0 ? $" ({game.PatchDate[..Math.Min(10, game.PatchDate.Length)]})" : "") : ", original (not patched yet)"));
-            if (game.Patched) lines.Add(game.SignedWithOurKey ? "Patched by this app: a new patch installs over it." : "Patched elsewhere (PC): patching here has to remove it first - back up its files with a PC before that.");
+            if (game.Patched) lines.Add(game.SignedWithOurKey ? "Patched by this app: a new patch installs over it." : "Patched elsewhere (PC): patching here removes it first (the app asks).");
             if (game.Version != GameFiles.GameVersion) lines.Add($"Warning: the mod is made for game version {GameFiles.GameVersion}.");
         }
         if (files)
@@ -196,18 +194,7 @@ public class MainActivity : Activity, IPatchLogger
             string? video = ModFiles.CurrentSetting("LoadingVideo");
             if (video != null) lines.Add($"Loading video setting: {video}" + (File.Exists(ModFiles.StillFile) ? " (still picture present)" : ""));
         }
-        var cache = files ? CacheBackup.Find(this, out _) : CacheBackup.Source.None;
-        if (game != null)
-            lines.Add(cache switch
-            {
-                CacheBackup.Source.Direct or CacheBackup.Source.Granted => "Game's downloaded files: visible to this app, can be exported." + (lastExport != null ? " Exported this session." : ""),
-                CacheBackup.Source.ModCopy => "Game's downloaded files: the mod's copy is here and can be exported.",
-                _ when CacheBackup.CanAskForGrant => "Game's downloaded files: Android can show them to this app; press the button below.",
-                _ => "Game's downloaded files: this Android version does not let any app see them. Back them up with a PC.",
-            });
         status.Text = string.Join("\n", lines);
-        grantCache.Visibility = game != null && files && cache == CacheBackup.Source.None && CacheBackup.CanAskForGrant ? ViewStates.Visible : ViewStates.Gone;
-        exportCache.Visibility = cache != CacheBackup.Source.None ? ViewStates.Visible : ViewStates.Gone;
 
         allowFiles.Visibility = files ? ViewStates.Gone : ViewStates.Visible;
         allowInstall.Visibility = install ? ViewStates.Gone : ViewStates.Visible;
@@ -287,9 +274,9 @@ public class MainActivity : Activity, IPatchLogger
             throw new UserError($"This is game version {version}; the loader and the mod are made for {GameFiles.GameVersion}.");
         if (!fromBackup) CheckSpace(parts.TotalBytes + 400L * 1048576);
 
-        // Asked before anything else happens, so a player without a backup can stop and make one first.
+        // asked before anything else happens, so nothing is spent on patching if the player would rather not remove the game
         if (installed != null && !installed.SignedWithOurKey && !await ConfirmRemoval(installed))
-            throw new UserError("Stopped before anything was changed. Back up the game's files (see the message before), then press the button again.");
+            throw new UserError("Stopped. Nothing was changed.");
 
         // everything that needs the original files or the network first, before anything on the phone changes
         byte[]? stillPicture = null;
@@ -337,17 +324,6 @@ public class MainActivity : Activity, IPatchLogger
             "- The mod updates itself from then on.", "OK", cancel: null);
     }
 
-    private string? lastExport;
-
-    private Task ExportCache() => RunJob("Exporting the game's downloaded files", async () =>
-    {
-        var source = CacheBackup.Find(this, out var grant);
-        lastExport = await Task.Run(() => CacheBackup.Export(this, source, grant, Log));
-        await Ask("Backup made",
-            $"The game's downloaded files are in:\n{lastExport}\n\nCopy that folder to a PC as well. It stays on the phone when the game is removed. " +
-            "It is game content: keep it private.", "OK", cancel: null);
-    });
-
     private Task UpdateModOnly() => RunJob("Updating the mod", async () =>
     {
         Directory.CreateDirectory(WorkDir);
@@ -391,7 +367,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { allowFiles, allowInstall, grantCache, exportCache, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()
@@ -411,24 +387,17 @@ public class MainActivity : Activity, IPatchLogger
     private bool removalConfirmed;
 
     /// <summary>
-    /// Removing the game erases Android/data/com.Everguild.WarhammerWarpforge/files, the game's downloaded content,
-    /// which cannot be downloaded again now that the game's own servers are closed. No app can back that folder up
-    /// on Android 11 and later, so the player has to copy it off with a PC first. Asked once per patch, up front.
+    /// The installed game has to be removed before Android accepts a copy signed with this app's key. Its downloaded
+    /// files go with it; the revival server hands them out again (owner, 2026-10-11). Asked once per patch, up front.
     /// </summary>
     private async Task<bool> ConfirmRemoval(GameFiles.Installed installed)
     {
-        bool ok = await Ask("Back up the game's files first",
+        bool ok = await Ask("Remove the game first?",
             (installed.Patched ? "The game on this phone was patched with a different key (on a PC)." : "The game on this phone is the original from the store.") +
-            " Android only accepts the copy patched here after that one is removed.\n\n" +
-            "REMOVING IT ERASES THE GAME'S DOWNLOADED FILES, AND THEY CANNOT BE DOWNLOADED AGAIN.\n\n" +
-            (lastExport != null ? $"This app exported them to {lastExport}; copy that folder to a PC too.\n\n" :
-             CacheBackup.Find(this, out _) != CacheBackup.Source.None ? "This app can see them: press Stop, then \"Export the game's downloaded files\", then patch again.\n\n" : "") +
-            "Before you go on, connect the phone to a PC and copy this folder off it, and check the copy is complete:\n" +
-            "Android/data/com.Everguild.WarhammerWarpforge/files\n\n" +
-            (CacheBackup.Find(this, out _) == CacheBackup.Source.None ? "(This app cannot make that copy on this phone: Android does not let it read another app's Android/data folder.)\n\n" : "") +
-            "Your account, decks and progress are on the server and are not affected. The MelonLoader folder stays.",
-            "I have a backup, continue", "Stop");
-        if (ok) Log("Player confirmed a backup of the game's files exists; the game will be removed after patching");
+            " Android only accepts the copy patched here after that one is removed, so the app removes it after patching. Android asks you to confirm.\n\n" +
+            "Your account, decks and progress are on the server and are not affected. The game's downloaded files come back from the server. The MelonLoader folder stays.",
+            "Continue", "Stop");
+        if (ok) Log("Player agreed to remove the installed game after patching");
         removalConfirmed = ok;
         return ok;
     }
@@ -496,10 +465,6 @@ public class MainActivity : Activity, IPatchLogger
                 case PickBackup: _ = PatchBackup(uri); break;
                 case SaveKey: SaveKeyTo(uri); break;
                 case LoadKey: LoadKeyFrom(uri); break;
-                case GrantCache:
-                    if (CacheBackup.AcceptGrant(this, uri)) { Log("Android granted the game's folder"); Refresh(); }
-                    else Say("That is not the game's folder. Pick Android > data > com.Everguild.WarhammerWarpforge and press \"Use this folder\".");
-                    break;
             }
         }
         catch (UserError e) { Say(e.Message); }
