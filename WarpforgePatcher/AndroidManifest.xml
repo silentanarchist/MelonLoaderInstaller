@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application android:label="Warpforge Patcher" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher"
+               android:allowBackup="false" android:theme="@android:style/Theme.Material.NoActionBar">
+    <!-- shares the log bundle with other apps (Discord, mail) without making any file public -->
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.silentanarchist.warpforgepatcher.files"
+              android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+    </provider>
+  </application>
+  <!-- the current mod from the revival server -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- installing the patched game; removing the original when its signature differs (the player confirms both) -->
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+  <!-- the loader's folder (MelonLoader/com.Everguild.WarhammerWarpforge on the phone's storage), like the game itself -->
+  <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <!-- the only other app this one needs to see -->
+  <queries>
+    <package android:name="com.Everguild.WarhammerWarpforge" />
+  </queries>
+</manifest>

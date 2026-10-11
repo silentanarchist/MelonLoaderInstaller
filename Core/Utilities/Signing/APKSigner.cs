@@ -1,4 +1,4 @@
-﻿using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Cms;
 using Org.BouncyCastle.Crypto;
@@ -215,12 +215,15 @@ namespace MelonLoader.Installer.Core.Utilities.Signing
 
         #region V2
 
+        // Warpforge Revival change: the signing block is written into the APK in place. Everything before the
+        // central directory stays where it is, so only the central directory and its end record (a few hundred KB
+        // at most) are held in memory, then the block, the central directory and the end record are written from
+        // the old central directory's offset onward. The original copied the whole APK into a MemoryStream and back,
+        // over a gigabyte for the game's data pack: too much for the patcher app on a phone. Same bytes as before.
         private void SignV2(string path)
         {
-            FileStream fs = new(path, FileMode.Open);
-            using FileMemory memory = new(fs);
-            using MemoryStream ms = new();
-            using FileMemory outMemory = new(ms);
+            using FileStream fs = new(path, FileMode.Open, FileAccess.ReadWrite);
+            FileMemory memory = new(fs);
             memory.Position = memory.Length() - 22;
             while (memory.ReadInt() != EndOfCentralDirectory.SIGNATURE)
             {
@@ -229,12 +232,7 @@ namespace MelonLoader.Installer.Core.Utilities.Signing
             memory.Position -= 4;
             var eocdPosition = memory.Position;
             EndOfCentralDirectory eocd = new(memory);
-            if (eocd == null)
-                return;
             var cd = eocd.OffsetOfCD;
-            memory.Position = cd - 16 - 8;
-            var d = memory.ReadULong();
-            var d2 = memory.ReadString(16);
             var section1 = GetSectionDigests(fs, 0, cd);
             var section3 = GetSectionDigests(fs, cd, eocdPosition);
             var section4 = GetSectionDigests(fs, eocdPosition, fs.Length);
@@ -248,7 +246,15 @@ namespace MelonLoader.Installer.Core.Utilities.Signing
             bytes[2] = sizeBytes[1];
             bytes[3] = sizeBytes[2];
             bytes[4] = sizeBytes[3];
-            var digest = _sha.ComputeHash([.. bytes, .. digestChunks.Aggregate((a, b) => a.Concat(b).ToArray())]);
+            byte[] digestInput = new byte[bytes.Length + digestChunks.Sum(c => c.Length)];
+            Buffer.BlockCopy(bytes, 0, digestInput, 0, bytes.Length);
+            int at = bytes.Length;
+            foreach (byte[] chunk in digestChunks)
+            {
+                Buffer.BlockCopy(chunk, 0, digestInput, at, chunk.Length);
+                at += chunk.Length;
+            }
+            var digest = _sha.ComputeHash(digestInput);
 
             uint algorithm = 0x0103;
 
@@ -276,36 +282,42 @@ namespace MelonLoader.Installer.Core.Utilities.Signing
             APKSigningBlock signingBlock = new();
             signingBlock.Values.Add(block.ToIDValuePair());
 
-            fs.Position = 0;
-            outMemory.WriteBytes(memory.ReadBytes(cd));
-            signingBlock.Write(outMemory);
-            eocd.OffsetOfCD = (int)ms.Position;
-            outMemory.WriteBytes(memory.ReadBytes((int)(eocdPosition - cd)));
-            eocd.Write(outMemory);
+            // the central directory as it is now (it moves up by the size of the signing block)
+            fs.Position = cd;
+            byte[] centralDirectory = new byte[eocdPosition - cd];
+            fs.ReadExactly(centralDirectory);
 
-            fs.SetLength(0);
-            ms.Position = 0;
-            ms.CopyTo(fs);
-            fs.Close();
+            using MemoryStream tail = new();
+            using FileMemory tailMemory = new(tail);
+            signingBlock.Write(tailMemory);
+            eocd.OffsetOfCD = (int)(cd + tail.Position);
+            tailMemory.WriteBytes(centralDirectory);
+            eocd.Write(tailMemory);
+
+            fs.Position = cd;
+            tail.Position = 0;
+            tail.CopyTo(fs);
+            fs.SetLength(fs.Position);
+            fs.Flush(true);
         }
 
         private List<byte[]> GetSectionDigests(FileStream fs, long startOffset, long endOffset)
         {
             var digests = new List<byte[]>();
             int chunkSize = 1024 * 1024;
+            byte[] bytes = new byte[1 + 4 + chunkSize];     // one buffer for every chunk (was a new 1 MB array per chunk)
             for (long i = startOffset; i < endOffset; i += chunkSize)
             {
                 fs.Position = i;
-                var size = Math.Min(endOffset - i, chunkSize);
-                byte[] bytes = new byte[1 + 4 + size];
+                var size = (int)Math.Min(endOffset - i, chunkSize);
                 bytes[0] = 0xa5;
                 byte[] sizeBytes = BitConverter.GetBytes((uint)size);
                 bytes[1] = sizeBytes[0];
                 bytes[2] = sizeBytes[1];
                 bytes[3] = sizeBytes[2];
                 bytes[4] = sizeBytes[3];
-                fs.Read(bytes, 5, (int)size);
-                digests.Add(_sha.ComputeHash(bytes));
+                fs.ReadExactly(bytes, 5, size);
+                digests.Add(_sha.ComputeHash(bytes, 0, 5 + size));
             }
             return digests;
         }

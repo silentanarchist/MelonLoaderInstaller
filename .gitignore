@@ -399,3 +399,6 @@ FodyWeavers.xsd
 App/Assets/installer_deps.zip
 App/meloninstaller.keystore
 App/keystore-pass.txt
+
+# Warpforge Patcher: the loader package is joined in at build time from the Android repo
+WarpforgePatcher/loader/

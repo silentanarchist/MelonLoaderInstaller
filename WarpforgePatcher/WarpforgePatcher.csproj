@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Warpforge Revival Patcher: patches the player's own copy of Warhammer 40,000: Warpforge on the phone
+       itself, with the same patching code as LemonPatch.exe (../Core). See README-WarpforgePatcher.md. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>WarpforgePatcher</RootNamespace>
+    <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
+    <ApplicationTitle>Warpforge Patcher</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <!-- the loader package is already a zip; storing it as-is keeps the build quick -->
+    <AndroidStoreUncompressedFileExtensions>.zip</AndroidStoreUncompressedFileExtensions>
+    <!-- melon_data.zip: the loader package from the Android repo (patcher/tool/melon_data.zip.part0-2 joined); build.sh puts it here -->
+    <MelonDataZip Condition="'$(MelonDataZip)' == ''">$(MSBuildThisFileDirectory)loader/melon_data.zip</MelonDataZip>
+  </PropertyGroup>
+  <ItemGroup>
+    <AndroidAsset Include="$(MelonDataZip)" Link="Assets/melon_data.zip" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/MelonLoader.Installer.Core.csproj" />
+    <PackageReference Include="Xamarin.AndroidX.Core" Version="1.13.1.4" />
+  </ItemGroup>
+</Project>
