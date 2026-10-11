@@ -185,7 +185,7 @@ public class MainActivity : Activity, IPatchLogger
         else
         {
             lines.Add($"Game: version {game.Version}" + (game.Patched ? ", patched" + (game.PatchDate.Length > 0 ? $" ({game.PatchDate[..Math.Min(10, game.PatchDate.Length)]})" : "") : ", original (not patched yet)"));
-            if (game.Patched) lines.Add(game.SignedWithOurKey ? "Patched by this app: a new patch installs over it." : "Patched elsewhere (PC): patching here removes it first.");
+            if (game.Patched) lines.Add(game.SignedWithOurKey ? "Patched by this app: a new patch installs over it." : "Patched elsewhere (PC): patching here has to remove it first - back up its files with a PC before that.");
             if (game.Version != GameFiles.GameVersion) lines.Add($"Warning: the mod is made for game version {GameFiles.GameVersion}.");
         }
         if (files)
@@ -274,6 +274,10 @@ public class MainActivity : Activity, IPatchLogger
             throw new UserError($"This is game version {version}; the loader and the mod are made for {GameFiles.GameVersion}.");
         if (!fromBackup) CheckSpace(parts.TotalBytes + 400L * 1048576);
 
+        // Asked before anything else happens, so a player without a backup can stop and make one first.
+        if (installed != null && !installed.SignedWithOurKey && !await ConfirmRemoval(installed))
+            throw new UserError("Stopped before anything was changed. Back up the game's files (see the message before), then press the button again.");
+
         // everything that needs the original files or the network first, before anything on the phone changes
         byte[]? stillPicture = null;
         if (still.Checked)
@@ -290,12 +294,8 @@ public class MainActivity : Activity, IPatchLogger
         installed = GameFiles.FindInstalled(this, OurCertificate());
         if (installed != null && !installed.SignedWithOurKey)
         {
-            bool go = await Ask("Remove the game first?",
-                (installed.Patched ? "The game on this phone was patched with a different key (on a PC)." : "The game on this phone is the original from the store.") +
-                " Android only accepts the patched copy once that one is removed.\n\n" +
-                "Your decks and progress are on the server and are not lost. The game's downloaded files are removed and download again on the next start. " +
-                "The mod's folder (MelonLoader) stays.\n\nAndroid will ask you to confirm.", "Remove and continue");
-            if (!go) throw new UserError("Stopped. Nothing was changed; the patched files are kept until the next patch.");
+            if (!removalConfirmed && !await ConfirmRemoval(installed))
+                throw new UserError("Stopped. Nothing was changed; the patched files are kept until the next patch.");
             var (removed, why) = await PackageOps.Uninstall(this, Log);
             if (!removed || GameFiles.FindInstalled(this, null) != null)
                 throw new UserError("The game was not removed. " + why);
@@ -348,6 +348,7 @@ public class MainActivity : Activity, IPatchLogger
     private async Task RunJob(string what, Func<Task> job)
     {
         busy = true;
+        removalConfirmed = false;
         SetButtons(false);
         Log("---- " + what);
         try { await job(); }
@@ -379,6 +380,29 @@ public class MainActivity : Activity, IPatchLogger
         Log($"Free space: {free / 1048576} MB, needed about {needed / 1048576} MB");
         if (free < needed)
             throw new UserError($"Not enough free space: about {needed / 1073741824.0:F1} GB is needed while patching, {free / 1073741824.0:F1} GB is free. It is given back afterwards.");
+    }
+
+    private bool removalConfirmed;
+
+    /// <summary>
+    /// Removing the game erases Android/data/com.Everguild.WarhammerWarpforge/files, the game's downloaded content,
+    /// which cannot be downloaded again now that the game's own servers are closed. No app can back that folder up
+    /// on Android 11 and later, so the player has to copy it off with a PC first. Asked once per patch, up front.
+    /// </summary>
+    private async Task<bool> ConfirmRemoval(GameFiles.Installed installed)
+    {
+        bool ok = await Ask("Back up the game's files first",
+            (installed.Patched ? "The game on this phone was patched with a different key (on a PC)." : "The game on this phone is the original from the store.") +
+            " Android only accepts the copy patched here after that one is removed.\n\n" +
+            "REMOVING IT ERASES THE GAME'S DOWNLOADED FILES, AND THEY CANNOT BE DOWNLOADED AGAIN.\n\n" +
+            "Before you go on, connect the phone to a PC and copy this folder off it, and check the copy is complete:\n" +
+            "Android/data/com.Everguild.WarhammerWarpforge/files\n\n" +
+            "(This app cannot make that copy: Android does not let any app read another app's Android/data folder.)\n\n" +
+            "Your account, decks and progress are on the server and are not affected. The MelonLoader folder stays.",
+            "I have a backup, continue", "Stop");
+        if (ok) Log("Player confirmed a backup of the game's files exists; the game will be removed after patching");
+        removalConfirmed = ok;
+        return ok;
     }
 
     // ---------------------------------------------------------------- signing key
