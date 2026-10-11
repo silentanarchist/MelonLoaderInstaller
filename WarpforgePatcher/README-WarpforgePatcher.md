@@ -7,9 +7,18 @@ project. It does what the PC scripts in that repo's `patcher/` folder do (`1 - p
 `6 - fix loading video.bat` with `7 - loading video setting.bat`).
 
 **No game content is shipped or downloaded.** The game's files are read from the copy installed on
-the phone (or from the player's own `.apks` / `.xapk` backup). The app carries only the loader
-package (`melon_data.zip`, built from the project's MelonLoader fork) and downloads the mod from the
-revival server.
+the phone (or from the player's own `.apks` / `.xapk` backup). The app downloads the loader package
+(`melon_data.zip`, built from the project's MelonLoader fork) from the Android repo on GitHub at the
+commit pinned in `LoaderPackage.cs`, checked against a pinned SHA-256, and the mod from the revival
+server. A new loader needs a new app build with the new commit and checksum.
+
+**Export the game's downloaded files.** Removing the game erases `Android/data/com.Everguild.WarhammerWarpforge/files`,
+which cannot be downloaded again. When the app can see those files it offers **Export the game's
+downloaded files (backup)**, which copies them to `Download/Warpforge game files backup <date>/` (every
+size checked). It can see them on Android 10 and older directly, and on Android 11 and 12 after the
+player grants the game's folder once in Android's picker. Android 13 and newer show no app another app's
+`Android/data`, so there only a PC can copy them, or a copy the mod makes in
+`UserData/WarpforgeRevival/original-cache` (the Android mod does not make one yet).
 
 ## How it patches
 
@@ -75,8 +84,9 @@ Needs the .NET 8 SDK with the `android` workload, and an Android SDK (platform 3
 ./build.sh <path to warpforge-revival-mod-android> [keystore] [password file]
 ```
 
-It joins `patcher/tool/melon_data.zip.part0-2` from the Android repo into `loader/melon_data.zip`
-(git-ignored) and writes `bin/Release/net8.0-android/publish/com.silentanarchist.warpforgepatcher-Signed.apk`.
+The APK is about 13.5 MB (arm64 and x86_64). `BUNDLE_LOADER=1 ./build.sh ...` also puts the loader package
+inside (joined from `patcher/tool/melon_data.zip.part0-2` into the git-ignored `loader/`), about 47 MB more.
+It writes `bin/Release/net8.0-android/publish/com.silentanarchist.warpforgepatcher-Signed.apk`.
 Without a keystore the APK is signed with a debug key.
 
 Licence: GPL-3.0, like the rest of this installer (see `../LICENSE`).

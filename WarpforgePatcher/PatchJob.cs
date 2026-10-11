@@ -12,7 +12,7 @@ internal static class PatchJob
     /// <param name="workDir">the app's own work folder (emptied first)</param>
     /// <param name="parts">the game's files; with alreadyInOut they were unpacked into workDir/out under the core's names</param>
     /// <returns>the patched APKs, ready to install</returns>
-    public static string[] Run(Android.Content.Context context, GameFiles.Parts parts, string workDir, string keyFile, IPatchLogger log)
+    public static string[] Run(Android.Content.Context context, GameFiles.Parts parts, string workDir, string keyFile, string loaderZip, IPatchLogger log)
     {
         string outDir = Path.Combine(workDir, "out");
         string temp = Path.Combine(workDir, "temp");
@@ -20,11 +20,9 @@ internal static class PatchJob
         Directory.CreateDirectory(temp);
         Directory.CreateDirectory(outDir);
 
-        // the loader package travels inside this app (the owner's MelonLoader fork's build; no game content)
+        // the loader package (LoaderPackage: downloaded and checked before patching); the core deletes the copy it is given
         string melon = Path.Combine(temp, "melon_data.zip");
-        using (var asset = context.Assets!.Open("melon_data.zip"))
-        using (var file = File.Create(melon))
-            asset.CopyTo(file);
+        File.Copy(loaderZip, melon, true);
 
         // Keep the game's own libunity.so: the core would otherwise put in a generic 6000.2.6f1 build, which the
         // game's 6000.2.6f2 data refuses. A "local" Unity package with no libraries in it prevents the swap.

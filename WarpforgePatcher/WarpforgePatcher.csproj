@@ -10,8 +10,8 @@
     <RootNamespace>WarpforgePatcher</RootNamespace>
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
     <ApplicationTitle>Warpforge Patcher</ApplicationTitle>
-    <ApplicationVersion>4</ApplicationVersion>
-    <ApplicationDisplayVersion>0.1.3</ApplicationDisplayVersion>
+    <ApplicationVersion>5</ApplicationVersion>
+    <ApplicationDisplayVersion>0.2.0</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- the loader package is already a zip; storing it as-is keeps the build quick -->
@@ -19,7 +19,8 @@
     <!-- melon_data.zip: the loader package from the Android repo (patcher/tool/melon_data.zip.part0-2 joined); build.sh puts it here -->
     <MelonDataZip Condition="'$(MelonDataZip)' == ''">$(MSBuildThisFileDirectory)loader/melon_data.zip</MelonDataZip>
   </PropertyGroup>
-  <ItemGroup>
+  <!-- normally the app downloads the loader package (LoaderPackage.cs); BundleLoader=true puts it inside the app instead -->
+  <ItemGroup Condition="'$(BundleLoader)' == 'true'">
     <AndroidAsset Include="$(MelonDataZip)" Link="Assets/melon_data.zip" />
   </ItemGroup>
   <ItemGroup>
