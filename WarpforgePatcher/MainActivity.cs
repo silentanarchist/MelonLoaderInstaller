@@ -34,7 +34,7 @@ public class MainActivity : Activity, IPatchLogger
         base.OnCreate(savedInstanceState);
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
         BuildUi();
-        Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}");
+        Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default");
     }
 
     protected override void OnResume()
@@ -110,17 +110,70 @@ public class MainActivity : Activity, IPatchLogger
     private int Dp(int dp) => (int)(dp * Resources!.DisplayMetrics!.Density + 0.5f);
 
     /// <summary>
-    /// Google's own phones with a Tensor chip (Pixel 6 and later): their video hardware is where the black menu after the
-    /// loading video was found (Pixel 6 Pro) and where Unity reproduced it (Pixel 6, 7, 8a, 9 Pro). Owner, 2026-10-11:
-    /// on by default for Pixels. Older Pixels (5 and before) have Snapdragon chips and stay off.
+    /// Phones whose video and graphics hardware is the Pixel 6 Pro's kind, where the loading video leaves the menu black
+    /// (black-menu-devices.md). Owner, 2026-10-11: on by default for
+    ///  - Google's Tensor Pixels (Pixel 6 and later; Unity reproduced the black screen on the Pixel 6, 7, 8a and 9 Pro);
+    ///  - Samsungs with the same hardware: an Exynos chip (Samsung's video decoder, as in Tensor) with an Arm Mali GPU
+    ///    (Note 20, S20/S21 outside the US, Exynos A-series). Exynos phones with an AMD Xclipse GPU stay off.
+    /// Older Pixels and Snapdragon Samsungs stay off.
     /// </summary>
     private static bool StillRecommended()
     {
-        if (OperatingSystem.IsAndroidVersionAtLeast(31) && (Build.SocManufacturer ?? "").Equals("Google", StringComparison.OrdinalIgnoreCase))
+        string socMaker = OperatingSystem.IsAndroidVersionAtLeast(31) ? (Build.SocManufacturer ?? "") : "";
+        if (socMaker.Equals("Google", StringComparison.OrdinalIgnoreCase))
             return true;      // every Tensor phone ships with Android 12 or newer, which reports the chip's maker
         var m = System.Text.RegularExpressions.Regex.Match(Build.Model ?? "", @"^Pixel (\d+)");
-        return (Build.Manufacturer ?? "").Equals("Google", StringComparison.OrdinalIgnoreCase)
-            && m.Success && int.Parse(m.Groups[1].Value) >= 6;
+        if ((Build.Manufacturer ?? "").Equals("Google", StringComparison.OrdinalIgnoreCase) && m.Success && int.Parse(m.Groups[1].Value) >= 6)
+            return true;
+
+        if (!(Build.Manufacturer ?? "").Equals("samsung", StringComparison.OrdinalIgnoreCase)) return false;
+        string hw = (Build.Hardware ?? "") + " " + (Build.Board ?? "");
+        bool exynos = socMaker.Contains("Samsung", StringComparison.OrdinalIgnoreCase)
+                   || hw.Contains("exynos", StringComparison.OrdinalIgnoreCase)
+                   || System.Text.RegularExpressions.Regex.IsMatch(hw, @"\b(s5e|universal)\d", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!exynos) return false;
+        string gpu = GpuName();
+        return gpu.Contains("Mali", StringComparison.OrdinalIgnoreCase) || gpu.Contains("Immortalis", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The GPU's name (GL_RENDERER), from a throwaway 1x1 OpenGL ES context; "" if that fails.</summary>
+    private static string GpuName()
+    {
+        var display = Android.Opengl.EGL14.EglNoDisplay;
+        var surface = Android.Opengl.EGL14.EglNoSurface;
+        var context = Android.Opengl.EGL14.EglNoContext;
+        try
+        {
+            display = Android.Opengl.EGL14.EglGetDisplay(Android.Opengl.EGL14.EglDefaultDisplay);
+            var version = new int[2];
+            if (!Android.Opengl.EGL14.EglInitialize(display, version, 0, version, 1)) return "";
+            int[] attribs = { Android.Opengl.EGL14.EglRenderableType, Android.Opengl.EGL14.EglOpenglEs2Bit,
+                              Android.Opengl.EGL14.EglSurfaceType, Android.Opengl.EGL14.EglPbufferBit, Android.Opengl.EGL14.EglNone };
+            var configs = new Android.Opengl.EGLConfig[1];
+            var count = new int[1];
+            if (!Android.Opengl.EGL14.EglChooseConfig(display, attribs, 0, configs, 0, 1, count, 0) || count[0] == 0) return "";
+            context = Android.Opengl.EGL14.EglCreateContext(display, configs[0], Android.Opengl.EGL14.EglNoContext,
+                new[] { Android.Opengl.EGL14.EglContextClientVersion, 2, Android.Opengl.EGL14.EglNone }, 0);
+            surface = Android.Opengl.EGL14.EglCreatePbufferSurface(display, configs[0],
+                new[] { Android.Opengl.EGL14.EglWidth, 1, Android.Opengl.EGL14.EglHeight, 1, Android.Opengl.EGL14.EglNone }, 0);
+            if (!Android.Opengl.EGL14.EglMakeCurrent(display, surface, surface, context)) return "";
+            return Android.Opengl.GLES20.GlGetString(Android.Opengl.GLES20.GlRenderer) ?? "";
+        }
+        catch { return ""; }
+        finally
+        {
+            try
+            {
+                if (display != Android.Opengl.EGL14.EglNoDisplay)
+                {
+                    Android.Opengl.EGL14.EglMakeCurrent(display, Android.Opengl.EGL14.EglNoSurface, Android.Opengl.EGL14.EglNoSurface, Android.Opengl.EGL14.EglNoContext);
+                    if (surface != Android.Opengl.EGL14.EglNoSurface) Android.Opengl.EGL14.EglDestroySurface(display, surface);
+                    if (context != Android.Opengl.EGL14.EglNoContext) Android.Opengl.EGL14.EglDestroyContext(display, context);
+                    Android.Opengl.EGL14.EglTerminate(display);
+                }
+            }
+            catch { }
+        }
     }
 
     private void Refresh()
