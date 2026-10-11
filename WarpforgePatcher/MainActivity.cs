@@ -109,12 +109,18 @@ public class MainActivity : Activity, IPatchLogger
 
     private int Dp(int dp) => (int)(dp * Resources!.DisplayMetrics!.Density + 0.5f);
 
-    /// <summary>Pixel 6 / 6 Pro / 6a (Tensor G1, Mali-G78): the phones whose video decoder leaves the menu black.</summary>
+    /// <summary>
+    /// Google's own phones with a Tensor chip (Pixel 6 and later): their video hardware is where the black menu after the
+    /// loading video was found (Pixel 6 Pro) and where Unity reproduced it (Pixel 6, 7, 8a, 9 Pro). Owner, 2026-10-11:
+    /// on by default for Pixels. Older Pixels (5 and before) have Snapdragon chips and stay off.
+    /// </summary>
     private static bool StillRecommended()
     {
-        string soc = OperatingSystem.IsAndroidVersionAtLeast(31) ? (Build.SocModel ?? "") : "";
-        return soc.Equals("GS101", StringComparison.OrdinalIgnoreCase)
-            || (Build.Model ?? "").StartsWith("Pixel 6", StringComparison.OrdinalIgnoreCase);
+        if (OperatingSystem.IsAndroidVersionAtLeast(31) && (Build.SocManufacturer ?? "").Equals("Google", StringComparison.OrdinalIgnoreCase))
+            return true;      // every Tensor phone ships with Android 12 or newer, which reports the chip's maker
+        var m = System.Text.RegularExpressions.Regex.Match(Build.Model ?? "", @"^Pixel (\d+)");
+        return (Build.Manufacturer ?? "").Equals("Google", StringComparison.OrdinalIgnoreCase)
+            && m.Success && int.Parse(m.Groups[1].Value) >= 6;
     }
 
     private void Refresh()

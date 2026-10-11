@@ -32,7 +32,7 @@ test APK); peak memory for the large file went from out-of-memory to about 50 MB
    backup straight into its work folder. Refuses a game version other than 1.35.0, or a copy without
    the data pack.
 2. Checks free space (the game's size plus about 400 MB while patching; given back afterwards).
-3. If "Fix black menu after loading" is ticked (ticked by default on Pixel 6 phones, GS101): takes the
+3. If "Fix black menu after loading" is ticked (ticked by default on Pixel 6 and later: Google Tensor phones): takes the
    loading video out of `assets/bin/Data/sharedassets0.resource` (same box walk as
    `tool/extract-intro.ps1`), its frame 200 ms before the end with `MediaMetadataRetriever`, scaled to
    1440x810, bottom row first, raw RGBA (4,665,600 bytes).
