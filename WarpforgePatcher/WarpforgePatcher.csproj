@@ -10,8 +10,8 @@
     <RootNamespace>WarpforgePatcher</RootNamespace>
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
     <ApplicationTitle>Warpforge Patcher</ApplicationTitle>
-    <ApplicationVersion>9</ApplicationVersion>
-    <ApplicationDisplayVersion>0.2.3</ApplicationDisplayVersion>
+    <ApplicationVersion>10</ApplicationVersion>
+    <ApplicationDisplayVersion>0.2.4</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- the loader package is already a zip; storing it as-is keeps the build quick -->

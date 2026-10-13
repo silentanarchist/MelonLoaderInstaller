@@ -209,6 +209,30 @@ internal static class ModFiles
         catch { return null; }
     }
 
+    /// <summary>The card art the mod exports in the game (Settings > Mod > Export card art, CardArtExport.cs).</summary>
+    public static string ArtExport => System.IO.Path.Combine(GameFiles.LoaderDir, "UserData", "WarpforgeRevival", "card-art-export.zip");
+
+    /// <summary>
+    /// Copies the mod's card art export to the phone's Download folder so it is easy to find. Deliberately no share
+    /// option (owner, 2026-10-13): the pictures are the game's art; what the player does with the file is up to them.
+    /// </summary>
+    public static string SaveArtExport(Action<string> log)
+    {
+        var info = new FileInfo(ArtExport);
+        if (!info.Exists) throw new UserError("There is no card art export yet. In the game: Settings > Mod > Export card art, then come back.");
+        string dir = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDownloads)!.AbsolutePath;
+        string target = System.IO.Path.Combine(dir, $"Warpforge card art {info.LastWriteTime:yyyy-MM-dd HHmm}.zip");
+        long free = new Android.OS.StatFs(dir).AvailableBytes;
+        if (free < info.Length + 20L * 1048576)
+            throw new UserError($"Not enough free space: {info.Length / 1048576} MB needed, {free / 1048576} MB free.");
+        string temp = target + ".part";
+        File.Copy(ArtExport, temp, true);
+        if (new FileInfo(temp).Length != info.Length) { File.Delete(temp); throw new UserError("The copy came out incomplete; try again."); }
+        File.Move(temp, target, true);
+        log($"Card art export saved to {target} ({info.Length / 1048576} MB)");
+        return target;
+    }
+
     /// <summary>One zip with the loader's log, the mod's settings and this app's own log, for sharing. Never the game login.</summary>
     public static string BundleLogs(string cacheDir, string patcherLog)
     {

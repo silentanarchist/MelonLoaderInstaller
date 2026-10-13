@@ -20,7 +20,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
-    private Button checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -90,11 +90,12 @@ public class MainActivity : Activity, IPatchLogger
         patch = Btn("Patch and install", () => _ = PatchInstalled());
         fromBackup = Btn("Patch from a backup file (.apks / .xapk)", () => PickFile(PickBackup, "*/*", null));
         modOnly = Btn("Update the mod only", () => _ = UpdateModOnly());
+        saveArt = Btn("Save card art export to Downloads", () => _ = SaveArt());
         shareLogs = Btn("Share logs", ShareLogs);
         saveKey = Btn("Save a copy of the signing key", () => PickFile(SaveKey, "application/x-pem-file", "warpforge-patcher-key.pem"));
         loadKey = Btn("Load a saved signing key", () => PickFile(LoadKey, "*/*", null));
 
-        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, shareLogs, saveKey, loadKey }) top.AddView(v);
+        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveArt, shareLogs, saveKey, loadKey }) top.AddView(v);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
         root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 3f));
@@ -213,6 +214,9 @@ public class MainActivity : Activity, IPatchLogger
             lines.Add(File.Exists(ModFiles.ModFile) ? $"Mod: on the phone ({File.GetLastWriteTime(ModFiles.ModFile):yyyy-MM-dd}); the game keeps it up to date." : "Mod: not on the phone yet.");
             string? video = ModFiles.CurrentSetting("LoadingVideo");
             if (video != null) lines.Add($"Loading video setting: {video}" + (File.Exists(ModFiles.StillFile) ? " (still picture present)" : ""));
+            var art = new FileInfo(ModFiles.ArtExport);
+            if (art.Exists) lines.Add($"Card art export: made in the game on {art.LastWriteTime:yyyy-MM-dd HH:mm} ({art.Length / 1048576} MB).");
+            else if (game?.Patched == true) lines.Add("Card art export: none yet. In the game: Settings > Mod > Export card art.");
         }
 
         allowFiles.Visibility = files ? ViewStates.Gone : ViewStates.Visible;
@@ -225,6 +229,7 @@ public class MainActivity : Activity, IPatchLogger
         fromBackup.Enabled = files && install && !blocked;
         modOnly.Visibility = game?.Patched == true ? ViewStates.Visible : ViewStates.Gone;
         modOnly.Enabled = files && !blocked;
+        saveArt.Visibility = files && File.Exists(ModFiles.ArtExport) ? ViewStates.Visible : ViewStates.Gone;
         appUpdate.Visibility = updateOffer != null ? ViewStates.Visible : ViewStates.Gone;
         if (updateOffer != null)
             appUpdate.Text = $"Update this app to {updateOffer.Version}" + (updateOffer.Required ? " (required)" : "");
@@ -396,6 +401,12 @@ public class MainActivity : Activity, IPatchLogger
         if (!ok) throw new UserError("The app update was not installed. " + message);
     });
 
+    private Task SaveArt() => RunJob("Saving the card art export", async () =>
+    {
+        string path = await Task.Run(() => ModFiles.SaveArtExport(Log));
+        Say("Saved to your Download folder:\n" + System.IO.Path.GetFileName(path));
+    });
+
     private Task UpdateModOnly() => RunJob("Updating the mod", async () =>
     {
         Directory.CreateDirectory(WorkDir);
@@ -439,7 +450,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveArt, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()
