@@ -20,7 +20,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
-    private Button appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    private Button checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -34,7 +34,7 @@ public class MainActivity : Activity, IPatchLogger
         base.OnCreate(savedInstanceState);
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
         BuildUi();
-        _ = CheckForAppUpdate();
+        _ = CheckForAppUpdate(manual: false);
         Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default");
     }
 
@@ -54,9 +54,21 @@ public class MainActivity : Activity, IPatchLogger
         root.SetBackgroundColor(Color.ParseColor("#16181B"));
         var top = new LinearLayout(this) { Orientation = Orientation.Vertical };
 
+        // title on the left, "Check for updates" in the top right corner
+        var titleRow = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+        titleRow.SetGravity(GravityFlags.CenterVertical);
         var title = Text("Warpforge Revival Patcher", 22, "#E8D9A8");
         title.SetTypeface(null, TypefaceStyle.Bold);
-        top.AddView(title);
+        titleRow.AddView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+        checkUpdates = new Button(this) { Text = "Check for updates" };
+        checkUpdates.SetAllCaps(false);
+        checkUpdates.SetTextSize(Android.Util.ComplexUnitType.Sp, 12);
+        checkUpdates.SetMinHeight(0);
+        checkUpdates.SetMinimumHeight(0);
+        checkUpdates.SetPadding(Dp(10), Dp(6), Dp(10), Dp(6));
+        checkUpdates.Click += (_, _) => { if (!busy) _ = CheckForAppUpdate(manual: true); };
+        titleRow.AddView(checkUpdates, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+        top.AddView(titleRow);
         top.AddView(Text("Puts the mod loader and the Warpforge Revival mod into your own copy of the game, on this phone. Nothing from the game is downloaded or shared.", 13, "#9AA0A6"));
 
         status = Text("", 14, "#E6E6E6");
@@ -339,10 +351,37 @@ public class MainActivity : Activity, IPatchLogger
 
     private AppUpdate.Offer? updateOffer;
 
-    private async Task CheckForAppUpdate()
+    private bool checking;
+
+    /// <summary>At start-up (quietly when there is nothing new) and from "Check for updates" (always answers).</summary>
+    private async Task CheckForAppUpdate(bool manual)
     {
-        updateOffer = await AppUpdate.Check(this, Log);
-        RunOnUiThread(() => { if (!busy) Refresh(); });
+        if (checking) return;
+        checking = true;
+        RunOnUiThread(() => { checkUpdates.Enabled = false; checkUpdates.Text = "Checking..."; });
+        try
+        {
+            var (offer, error) = await AppUpdate.Check(this, Log);
+            updateOffer = offer;
+            RunOnUiThread(() => { if (!busy) Refresh(); });
+            if (offer != null)
+            {
+                bool now = await Ask(offer.Required ? "Required update" : "Update available",
+                    $"Warpforge Patcher {offer.Version} is available (you have {AppUpdate.Current(this)})." +
+                    (offer.Required ? "\n\nThis update is required: patching is paused until the app is updated." : "") +
+                    "\n\nUpdating keeps your saved signing key. Android asks you to confirm, then the app restarts as the new version.",
+                    "Update now", offer.Required ? "Not now" : "Later");
+                if (now && !busy) await UpdateApp();
+            }
+            else if (manual)
+                Say(error != null ? "Could not check for updates (" + error + "). Check the connection and try again."
+                                  : $"You have the latest version ({AppUpdate.Current(this)}).");
+        }
+        finally
+        {
+            checking = false;
+            RunOnUiThread(() => { checkUpdates.Enabled = !busy; checkUpdates.Text = "Check for updates"; });
+        }
     }
 
     private Task UpdateApp() => RunJob("Updating this app", async () =>
@@ -400,7 +439,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()

@@ -37,8 +37,8 @@ internal static class AppUpdate
         return Version.TryParse(name.Split('-')[0], out var v) ? v : new Version(0, 0);
     }
 
-    /// <summary>The newest published patcher release newer than this build, or null (also null when GitHub cannot be reached).</summary>
-    public static async Task<Offer?> Check(Context context, Action<string> log)
+    /// <summary>The newest published patcher release newer than this build (null when up to date); error is set when GitHub could not be asked.</summary>
+    public static async Task<(Offer? offer, string? error)> Check(Context context, Action<string> log)
     {
         try
         {
@@ -71,19 +71,19 @@ internal static class AppUpdate
                 }
             }
             var current = Current(context);
-            if (best == null || best.Version <= current) { log($"App is up to date ({current})"); return null; }
+            if (best == null || best.Version <= current) { log($"App is up to date ({current})"); return (null, null); }
             if (!best.ApkUrl.StartsWith("https://github.com/silentanarchist/warpforge-revival-mod-android/releases/download/", StringComparison.Ordinal))
             {
                 log("Update check: the release's APK is not on this project's GitHub page; ignored");
-                return null;
+                return (null, null);
             }
             log($"App update available: {best.Version}{(best.Required ? " (required)" : "")}");
-            return best;
+            return (best, null);
         }
         catch (Exception e)
         {
             log("Could not check for an app update: " + e.Message);
-            return null;
+            return (null, e.Message);
         }
     }
 
