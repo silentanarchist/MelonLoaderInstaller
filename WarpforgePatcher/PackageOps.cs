@@ -10,11 +10,11 @@ internal static class PackageOps
     private const string StatusAction = "com.silentanarchist.warpforgepatcher.INSTALL_STATUS";
 
     /// <summary>Installs all patched APKs together as one app (they are splits of one package).</summary>
-    public static Task<(bool ok, string message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log)
+    public static Task<(bool ok, string message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
     {
         var installer = activity.PackageManager!.PackageInstaller;
         var p = new PackageInstaller.SessionParams(PackageInstallMode.FullInstall);
-        p.SetAppPackageName(GameFiles.Package);
+        p.SetAppPackageName(package ?? GameFiles.Package);
         if (OperatingSystem.IsAndroidVersionAtLeast(26)) p.SetInstallReason(PackageInstallReason.User);
         int id = installer.CreateSession(p);
         using (var session = installer.OpenSession(id))

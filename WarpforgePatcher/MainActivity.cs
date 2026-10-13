@@ -20,7 +20,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
-    private Button allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    private Button appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -34,6 +34,7 @@ public class MainActivity : Activity, IPatchLogger
         base.OnCreate(savedInstanceState);
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
         BuildUi();
+        _ = CheckForAppUpdate();
         Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default");
     }
 
@@ -61,6 +62,13 @@ public class MainActivity : Activity, IPatchLogger
         status = Text("", 14, "#E6E6E6");
         status.SetPadding(0, Dp(12), 0, Dp(8));
         top.AddView(status);
+
+        // shown only when a newer build of this app is on GitHub (AppUpdate)
+        appUpdate = Btn("Update this app", () => _ = UpdateApp());
+        appUpdate.Visibility = ViewStates.Gone;
+        appUpdate.SetBackgroundColor(Color.ParseColor("#8A6E2F"));
+        appUpdate.SetTextColor(Color.ParseColor("#FFFAF0"));
+        top.AddView(appUpdate);
 
         allowFiles = Btn("Allow access to the loader's folder", () => AskFilesAccess());
         allowInstall = Btn("Allow this app to install the game", () => AskInstallAccess());
@@ -194,15 +202,20 @@ public class MainActivity : Activity, IPatchLogger
             string? video = ModFiles.CurrentSetting("LoadingVideo");
             if (video != null) lines.Add($"Loading video setting: {video}" + (File.Exists(ModFiles.StillFile) ? " (still picture present)" : ""));
         }
-        status.Text = string.Join("\n", lines);
 
         allowFiles.Visibility = files ? ViewStates.Gone : ViewStates.Visible;
         allowInstall.Visibility = install ? ViewStates.Gone : ViewStates.Visible;
         patch.Text = game == null ? "Patch and install (needs the installed game)" : game.Patched ? "Patch again and install" : "Patch and install";
-        patch.Enabled = game != null && files && install;
-        fromBackup.Enabled = files && install;
+        bool blocked = updateOffer?.Required == true;     // a required app update comes first
+        if (blocked) lines.Add($"A required update of this app ({updateOffer!.Version}) is available. Update the app first (button above); patching is paused until then.");
+        status.Text = string.Join("\n", lines);
+        patch.Enabled = game != null && files && install && !blocked;
+        fromBackup.Enabled = files && install && !blocked;
         modOnly.Visibility = game?.Patched == true ? ViewStates.Visible : ViewStates.Gone;
-        modOnly.Enabled = files;
+        modOnly.Enabled = files && !blocked;
+        appUpdate.Visibility = updateOffer != null ? ViewStates.Visible : ViewStates.Gone;
+        if (updateOffer != null)
+            appUpdate.Text = $"Update this app to {updateOffer.Version}" + (updateOffer.Required ? " (required)" : "");
         saveKey.Enabled = File.Exists(KeyFile);
     }
 
@@ -324,6 +337,26 @@ public class MainActivity : Activity, IPatchLogger
             "- The mod updates itself from then on.", "OK", cancel: null);
     }
 
+    private AppUpdate.Offer? updateOffer;
+
+    private async Task CheckForAppUpdate()
+    {
+        updateOffer = await AppUpdate.Check(this, Log);
+        RunOnUiThread(() => { if (!busy) Refresh(); });
+    }
+
+    private Task UpdateApp() => RunJob("Updating this app", async () =>
+    {
+        var offer = updateOffer ?? throw new UserError("No app update is waiting.");
+        if (!PackageManager!.CanRequestPackageInstalls())
+            throw new UserError("This app needs \"Allow this app to install the game\" to update itself too. Press that button first.");
+        string apk = await AppUpdate.Download(this, offer, Log);
+        Log($"Installing app {offer.Version}; Android asks you to confirm. The app closes and restarts as the new version.");
+        var (ok, message) = await PackageOps.Install(this, new[] { apk }, Log, PackageName);
+        // on success Android usually closes this app before this line runs
+        if (!ok) throw new UserError("The app update was not installed. " + message);
+    });
+
     private Task UpdateModOnly() => RunJob("Updating the mod", async () =>
     {
         Directory.CreateDirectory(WorkDir);
@@ -367,7 +400,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()
