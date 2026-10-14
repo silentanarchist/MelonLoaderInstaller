@@ -9,6 +9,43 @@ internal static class PackageOps
 {
     private const string StatusAction = "com.silentanarchist.warpforgepatcher.INSTALL_STATUS";
 
+    // The install / uninstall currently waiting for an answer from Android. Android's confirmation screen can be closed
+    // by tapping outside it, and then Android sometimes sends no answer at all: the app would wait for ever. So the
+    // confirmation is kept, and the screen offers to show it again or to cancel (MainActivity.OnResume).
+    private static TaskCompletionSource<(bool, string)>? pending;
+    private static Intent? lastConfirm;
+    private static int pendingSession = -1;
+    private static string pendingWhat = "";
+
+    /// <summary>True while an install or uninstall waits for Android and its confirmation has been shown at least once.</summary>
+    public static bool WaitingForConfirmation => pending != null && !pending.Task.IsCompleted && lastConfirm != null;
+    public static string WaitingFor => pendingWhat;
+
+    /// <summary>Shows Android's confirmation again (after it was closed by a tap outside it).</summary>
+    public static bool ShowConfirmationAgain(Activity activity, Action<string> log)
+    {
+        if (!WaitingForConfirmation) return false;
+        try { activity.StartActivity(lastConfirm); log("Showing Android's confirmation again"); return true; }
+        catch (Exception e)
+        {
+            log("Android's confirmation could not be shown again: " + e.Message);
+            Cancel(activity, log, "Android's confirmation is no longer available. Press the button again to start over.");
+            return false;
+        }
+    }
+
+    /// <summary>Gives up waiting: the install session is abandoned and the waiting job ends as cancelled.</summary>
+    public static void Cancel(Activity activity, Action<string> log, string why = "It was cancelled.")
+    {
+        if (pendingSession >= 0)
+        {
+            try { activity.PackageManager!.PackageInstaller.AbandonSession(pendingSession); } catch { }
+            pendingSession = -1;
+        }
+        log("Stopped waiting for Android's confirmation");
+        pending?.TrySetResult((false, why));
+    }
+
     /// <summary>Installs all patched APKs together as one app (they are splits of one package).</summary>
     public static Task<(bool ok, string message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
     {
@@ -31,7 +68,8 @@ internal static class PackageOps
                 output.Flush();
                 session.Fsync(output);
             }
-            var wait = Listen(activity, log);
+            var wait = Listen(activity, log, package == null ? "installing the patched game" : "installing the app update");
+            pendingSession = id;
             session.Commit(StatusSender(activity, id));
             return wait;
         }
@@ -40,7 +78,8 @@ internal static class PackageOps
     /// <summary>Removes the installed game (Android asks the player to confirm).</summary>
     public static Task<(bool ok, string message)> Uninstall(Activity activity, Action<string> log)
     {
-        var wait = Listen(activity, log);
+        var wait = Listen(activity, log, "removing the game");
+        pendingSession = -1;
         activity.PackageManager!.PackageInstaller.Uninstall(GameFiles.Package, StatusSender(activity, 0x5157));
         return wait;
     }
@@ -53,16 +92,23 @@ internal static class PackageOps
         return PendingIntent.GetBroadcast(context, requestCode, intent, flags)!.IntentSender;
     }
 
-    private static Task<(bool ok, string message)> Listen(Activity activity, Action<string> log)
+    private static Task<(bool ok, string message)> Listen(Activity activity, Action<string> log, string what)
     {
         var done = new TaskCompletionSource<(bool, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        pending = done;
+        lastConfirm = null;
+        pendingWhat = what;
         var receiver = new StatusReceiver(activity, done, log);
         var filter = new IntentFilter(StatusAction);
         if (OperatingSystem.IsAndroidVersionAtLeast(33))
             activity.RegisterReceiver(receiver, filter, ReceiverFlags.NotExported);
         else
             activity.RegisterReceiver(receiver, filter);
-        done.Task.ContinueWith(_ => { try { activity.UnregisterReceiver(receiver); } catch { } });
+        done.Task.ContinueWith(_ =>
+        {
+            try { activity.UnregisterReceiver(receiver); } catch { }
+            if (ReferenceEquals(pending, done)) { pending = null; lastConfirm = null; pendingSession = -1; }
+        });
         return done.Task;
     }
 
@@ -83,6 +129,7 @@ internal static class PackageOps
 #pragma warning restore CA1422
                 if (confirm != null)
                 {
+                    lastConfirm = confirm;
                     try { activity.StartActivity(confirm); }
                     catch (Exception e) { done.TrySetResult((false, "Could not show Android's confirmation: " + e.Message)); }
                 }

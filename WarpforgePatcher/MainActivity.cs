@@ -20,6 +20,8 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
+    private LinearLayout waitPanel = null!;
+    private TextView waitText = null!;
     private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
@@ -42,6 +44,16 @@ public class MainActivity : Activity, IPatchLogger
     {
         base.OnResume();
         if (!busy) Refresh();
+        // Back on this screen while Android's answer is still outstanding: its confirmation was probably closed by a
+        // tap outside it. Give Android a moment to answer first (a real install can take a few seconds to report).
+        if (PackageOps.WaitingForConfirmation)
+            waitPanel.PostDelayed(() =>
+            {
+                if (!PackageOps.WaitingForConfirmation) return;
+                waitText.Text = $"Still waiting for Android to confirm {PackageOps.WaitingFor}. If its confirmation was closed, show it again, or cancel.";
+                waitPanel.Visibility = ViewStates.Visible;
+            }, 6000);
+        else waitPanel.Visibility = ViewStates.Gone;
     }
 
     // ---------------------------------------------------------------- screen
@@ -74,6 +86,22 @@ public class MainActivity : Activity, IPatchLogger
         status = Text("", 14, "#E6E6E6");
         status.SetPadding(0, Dp(12), 0, Dp(8));
         top.AddView(status);
+
+        // shown when Android's confirmation was closed without an answer (tap outside it): show it again or cancel
+        waitPanel = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
+        waitPanel.SetBackgroundColor(Color.ParseColor("#2A2418"));
+        waitPanel.SetPadding(Dp(10), Dp(8), Dp(10), Dp(8));
+        waitText = Text("", 14, "#F0DFB0");
+        waitPanel.AddView(waitText);
+        var again = new Button(this) { Text = "Show the confirmation again" };
+        again.SetAllCaps(false);
+        again.Click += (_, _) => { if (PackageOps.ShowConfirmationAgain(this, Log)) waitPanel.Visibility = ViewStates.Gone; };
+        var cancel = new Button(this) { Text = "Cancel" };
+        cancel.SetAllCaps(false);
+        cancel.Click += (_, _) => { PackageOps.Cancel(this, Log); waitPanel.Visibility = ViewStates.Gone; };
+        waitPanel.AddView(again);
+        waitPanel.AddView(cancel);
+        top.AddView(waitPanel);
 
         // shown only when a newer build of this app is on GitHub (AppUpdate)
         appUpdate = Btn("Update this app", () => _ = UpdateApp());
@@ -443,6 +471,7 @@ public class MainActivity : Activity, IPatchLogger
         finally
         {
             busy = false;
+            waitPanel.Visibility = ViewStates.Gone;
             SetButtons(true);
             Refresh();
         }
