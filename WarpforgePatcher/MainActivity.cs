@@ -53,6 +53,28 @@ public class MainActivity : Activity, IPatchLogger
 
     // ---------------------------------------------------------------- screen
 
+    private LinearLayout patcherPage = null!, toolsPage = null!;
+    private readonly List<(Button tab, LinearLayout page)> tabButtons = new();
+
+    private void ShowPage(LinearLayout page)
+    {
+        foreach (var (tab, p) in tabButtons)
+        {
+            bool on = p == page;
+            p.Visibility = on ? ViewStates.Visible : ViewStates.Gone;
+            tab.SetBackgroundColor(Color.ParseColor(on ? "#8A6E2F" : "#2B2E33"));
+            tab.SetTextColor(Color.ParseColor(on ? "#FFFAF0" : "#B0B5BA"));
+        }
+    }
+
+    private TextView Section(string text)
+    {
+        var t = Text(text, 16, "#E8D9A8");
+        t.SetTypeface(null, TypefaceStyle.Bold);
+        t.SetPadding(0, Dp(14), 0, Dp(2));
+        return t;
+    }
+
     private void BuildUi()
     {
         int pad = Dp(16);
@@ -103,7 +125,36 @@ public class MainActivity : Activity, IPatchLogger
         saveKey = Btn("Save a copy of the signing key", () => PickFile(SaveKey, "application/x-pem-file", "warpforge-patcher-key.pem"));
         loadKey = Btn("Load a saved signing key", () => PickFile(LoadKey, "*/*", null));
 
-        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, stillFix, saveArt, shareLogs, saveKey, loadKey }) top.AddView(v);
+        // two pages under one menu: Patcher (patching and the mod) and Tools (everything else); more pages can be added here
+        var tabs = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+        tabs.SetPadding(0, Dp(4), 0, Dp(4));
+        patcherPage = new LinearLayout(this) { Orientation = Orientation.Vertical };
+        toolsPage = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
+        foreach (var (name, page) in new[] { ("Patcher", patcherPage), ("Tools", toolsPage) })
+        {
+            var tab = new Button(this) { Text = name };
+            tab.SetAllCaps(false);
+            tab.Click += (_, _) => ShowPage(page);
+            tabButtons.Add((tab, page));
+            tabs.AddView(tab, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+        }
+        top.AddView(tabs);
+        top.AddView(patcherPage);
+        top.AddView(toolsPage);
+
+        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, shareLogs }) patcherPage.AddView(v);
+
+        toolsPage.AddView(Section("Black screen fix"));
+        toolsPage.AddView(Text("Shows a still picture instead of the loading video, for phones that end up on a black menu after loading. Works on the already patched game; nothing is patched again.", 13, "#9AA0A6"));
+        toolsPage.AddView(stillFix);
+        toolsPage.AddView(Section("Card art"));
+        toolsPage.AddView(Text("Make the export in the game first: Settings > Mod > Export card art.", 13, "#9AA0A6"));
+        toolsPage.AddView(saveArt);
+        toolsPage.AddView(Section("Signing key"));
+        toolsPage.AddView(Text("The key this app signs the patched game with. Keep a copy: patching again with another key means removing the game first.", 13, "#9AA0A6"));
+        toolsPage.AddView(saveKey);
+        toolsPage.AddView(loadKey);
+        ShowPage(patcherPage);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
         root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 3f));
@@ -242,9 +293,15 @@ public class MainActivity : Activity, IPatchLogger
         modOnly.Visibility = game?.Patched == true ? ViewStates.Visible : ViewStates.Gone;
         modOnly.Enabled = files && !blocked;
         // the black screen fix on its own, for an already patched game: on when the mod's LoadingVideo setting is Still
-        stillFix.Visibility = game?.Patched == true && files ? ViewStates.Visible : ViewStates.Gone;
-        stillFix.Text = StillFixOn() ? "Remove the black screen fix" : "Apply the black screen fix";
-        saveArt.Visibility = files && File.Exists(ModFiles.ArtExport) ? ViewStates.Visible : ViewStates.Gone;
+        bool fixOn = files && StillFixOn();
+        stillFix.Enabled = game?.Patched == true && files;
+        stillFix.Text = fixOn ? "Remove the black screen fix"
+                      : game?.Patched != true ? "Apply the black screen fix (needs the patched game)"
+                      : !files ? "Apply the black screen fix (needs access to the loader's folder)"
+                      : "Apply the black screen fix";
+        bool artReady = files && File.Exists(ModFiles.ArtExport);
+        saveArt.Enabled = artReady;
+        saveArt.Text = artReady ? "Save card art export to Downloads" : "Save card art export to Downloads (no export yet)";
         appUpdate.Visibility = updateOffer != null ? ViewStates.Visible : ViewStates.Gone;
         if (updateOffer != null)
             appUpdate.Text = $"Update this app to {updateOffer.Version}" + (updateOffer.Required ? " (required)" : "");
