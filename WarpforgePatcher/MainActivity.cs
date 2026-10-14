@@ -26,7 +26,7 @@ public class MainActivity : Activity, IPatchLogger
     private Button? jobButton;
     private string jobButtonLabel = "";
     private bool continueShown;
-    private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, stillFix = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, stillFix = null!, setServer = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -120,6 +120,8 @@ public class MainActivity : Activity, IPatchLogger
         fromBackup = Btn("Patch from a backup file (.apks / .xapk)", () => PickFile(PickBackup, "*/*", null));
         modOnly = Btn("Update the mod only", () => _ = UpdateModOnly());
         stillFix = Btn("Apply the black screen fix", () => _ = ToggleStillFix());
+        setServer = Btn("Change the server", ChangeServer);
+        serverInfo = Text("", 13, "#E6E6E6");
         saveArt = Btn("Save card art export to Downloads", () => _ = SaveArt());
         shareLogs = Btn("Share logs", ShareLogs);
         saveKey = Btn("Save a copy of the signing key", () => PickFile(SaveKey, "application/x-pem-file", "warpforge-patcher-key.pem"));
@@ -147,6 +149,10 @@ public class MainActivity : Activity, IPatchLogger
         toolsPage.AddView(Section("Black screen fix"));
         toolsPage.AddView(Text("Shows a still picture instead of the loading video, for devices that end up on a black menu after loading. Works on the already patched game; nothing is patched again.", 13, "#9AA0A6"));
         toolsPage.AddView(stillFix);
+        toolsPage.AddView(Section("Server"));
+        toolsPage.AddView(Text("The Warpforge Revival server the mod connects to (ServerUrl in the mod's settings). Close the game fully before changing it.", 13, "#9AA0A6"));
+        toolsPage.AddView(serverInfo);
+        toolsPage.AddView(setServer);
         toolsPage.AddView(Section("Card art"));
         toolsPage.AddView(Text("Make the export in the game first: Settings > Mod > Export card art.", 13, "#9AA0A6"));
         toolsPage.AddView(saveArt);
@@ -299,6 +305,12 @@ public class MainActivity : Activity, IPatchLogger
                       : game?.Patched != true ? "Apply the black screen fix (needs the patched game)"
                       : !files ? "Apply the black screen fix (needs access to the loader's folder)"
                       : "Apply the black screen fix";
+        string? server = files ? ModFiles.CurrentSetting("ServerUrl") : null;
+        serverInfo.Text = !files ? "Needs access to the loader's folder (Patcher page)."
+                        : string.IsNullOrWhiteSpace(server) || string.Equals(server.Trim(), ModFiles.DefaultServer, StringComparison.OrdinalIgnoreCase)
+                            ? $"Now: {ModFiles.DefaultServer} (the community server)"
+                            : $"Now: {server!.Trim()}";
+        setServer.Enabled = files;
         bool artReady = files && File.Exists(ModFiles.ArtExport);
         saveArt.Enabled = artReady;
         saveArt.Text = artReady ? "Save card art export to Downloads" : "Save card art export to Downloads (no export yet)";
@@ -510,6 +522,55 @@ public class MainActivity : Activity, IPatchLogger
         Log($"Done: mod {version} is in place. Close the game fully and start it again.");
     });
 
+    private TextView serverInfo = null!;
+
+    /// <summary>Sets ServerUrl in the mod's settings file, so players need not edit it with a file manager.</summary>
+    private void ChangeServer()
+    {
+        string current = ModFiles.CurrentSetting("ServerUrl")?.Trim() ?? "";
+        var input = new EditText(this) { Text = current.Length > 0 ? current : ModFiles.DefaultServer };
+        input.SetSingleLine(true);
+        input.InputType = Android.Text.InputTypes.ClassText | Android.Text.InputTypes.TextVariationUri;
+        var box = new FrameLayout(this);
+        box.SetPadding(Dp(20), Dp(4), Dp(20), 0);
+        box.AddView(input);
+        var dialog = new AlertDialog.Builder(this)
+            .SetTitle("Server address")!
+            .SetMessage("For example example.com (port 8780 is assumed). Write https://... or http://... to choose the connection. Close the game fully first; the change applies the next time it starts.")!
+            .SetView(box)!
+            .SetPositiveButton("Save", (EventHandler<DialogClickEventArgs>?)null)!
+            .SetNeutralButton("Community server", (EventHandler<DialogClickEventArgs>?)null)!
+            .SetNegativeButton("Cancel", (EventHandler<DialogClickEventArgs>?)null)!
+            .Create()!;
+        dialog.ShowEvent += (_, _) =>
+        {
+            dialog.GetButton((int)DialogButtonType.Positive)!.Click += (_, _) =>
+            {
+                string value = (input.Text ?? "").Trim().TrimEnd('/');
+                if (value.Length == 0 || value.Any(c => char.IsWhiteSpace(c) || c == '"' || c == '\\'))
+                {
+                    input.Error = "Write a server address, without spaces or quotes.";
+                    return;
+                }
+                SaveServer(value);
+                dialog.Dismiss();
+            };
+            dialog.GetButton((int)DialogButtonType.Neutral)!.Click += (_, _) => { SaveServer(ModFiles.DefaultServer); dialog.Dismiss(); };
+        };
+        dialog.Show();
+    }
+
+    private void SaveServer(string value)
+    {
+        try
+        {
+            ModFiles.SetSetting("ServerUrl", value, Log);
+            Log("Server set. Start the game again for it to connect there.");
+        }
+        catch (Exception e) { Log("Could not change the server: " + e.Message); Say("Could not change the server: " + e.Message); }
+        Refresh();
+    }
+
     private static bool StillFixOn() =>
         string.Equals(ModFiles.CurrentSetting("LoadingVideo"), "Still", StringComparison.OrdinalIgnoreCase) && File.Exists(ModFiles.StillFile);
 
@@ -581,7 +642,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, stillFix, saveArt, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, stillFix, setServer, saveArt, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()
