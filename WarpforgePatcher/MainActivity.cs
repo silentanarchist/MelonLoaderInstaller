@@ -98,7 +98,7 @@ public class MainActivity : Activity, IPatchLogger
         checkUpdates.Click += (_, _) => { if (!busy) _ = CheckForAppUpdate(manual: true); };
         titleRow.AddView(checkUpdates, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
         top.AddView(titleRow);
-        top.AddView(Text("Puts the mod loader and the Warpforge Revival mod into your own copy of the game, on this phone. Nothing from the game is downloaded or shared.", 13, "#9AA0A6"));
+        top.AddView(Text("Puts the mod loader and the Warpforge Revival mod into your own copy of the game, on this device. Nothing from the game is downloaded or shared.", 13, "#9AA0A6"));
 
         status = Text("", 14, "#E6E6E6");
         status.SetPadding(0, Dp(12), 0, Dp(8));
@@ -145,7 +145,7 @@ public class MainActivity : Activity, IPatchLogger
         foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, shareLogs }) patcherPage.AddView(v);
 
         toolsPage.AddView(Section("Black screen fix"));
-        toolsPage.AddView(Text("Shows a still picture instead of the loading video, for phones that end up on a black menu after loading. Works on the already patched game; nothing is patched again.", 13, "#9AA0A6"));
+        toolsPage.AddView(Text("Shows a still picture instead of the loading video, for devices that end up on a black menu after loading. Works on the already patched game; nothing is patched again.", 13, "#9AA0A6"));
         toolsPage.AddView(stillFix);
         toolsPage.AddView(Section("Card art"));
         toolsPage.AddView(Text("Make the export in the game first: Settings > Mod > Export card art.", 13, "#9AA0A6"));
@@ -274,7 +274,7 @@ public class MainActivity : Activity, IPatchLogger
         }
         if (files)
         {
-            lines.Add(File.Exists(ModFiles.ModFile) ? $"Mod: on the phone ({File.GetLastWriteTime(ModFiles.ModFile):yyyy-MM-dd}); the game keeps it up to date." : "Mod: not on the phone yet.");
+            lines.Add(File.Exists(ModFiles.ModFile) ? $"Mod: on the device ({File.GetLastWriteTime(ModFiles.ModFile):yyyy-MM-dd}); the game keeps it up to date." : "Mod: not on the device yet.");
             string? video = ModFiles.CurrentSetting("LoadingVideo");
             if (video != null) lines.Add($"Loading video setting: {video}" + (File.Exists(ModFiles.StillFile) ? " (still picture present)" : ""));
             var art = new FileInfo(ModFiles.ArtExport);
@@ -368,7 +368,7 @@ public class MainActivity : Activity, IPatchLogger
     private async Task PatchAndInstall(GameFiles.Parts parts, GameFiles.Installed? installed, bool fromBackup)
     {
         if (parts.Base.Length == 0 || parts.Arm64.Length == 0)
-            throw new UserError("The game's arm64 code file is missing. This phone's copy of the game may not be the arm64 version.");
+            throw new UserError("The game's arm64 code file is missing. This device's copy of the game may not be the arm64 version.");
         if (!parts.HasDataPack)
             throw new UserError("The game's data pack (UnityDataAssetPack, about 700 MB) is missing; the patched game would not start. " +
                                 (fromBackup ? "Make the backup again with all its parts." : "Start the original game once so Android downloads it, then try again."));
@@ -548,7 +548,7 @@ public class MainActivity : Activity, IPatchLogger
         Log("---- " + what);
         try { await job(); }
         catch (UserError e) { Log("Stopped: " + e.Message); Say(e.Message); }
-        catch (HttpRequestException e) { Log("Network: " + e); Say("Could not reach the server (" + e.Message + "). Check the connection and try again. Nothing on the phone was changed by this step."); }
+        catch (HttpRequestException e) { Log("Network: " + e); Say("Could not reach the server (" + e.Message + "). Check the connection and try again. Nothing on the device was changed by this step."); }
         catch (Exception e) { Log("ERROR " + e); Say("Something went wrong: " + e.Message + "\n\nThe log at the bottom has the details; \"Share logs\" sends it."); }
         finally
         {
@@ -607,7 +607,7 @@ public class MainActivity : Activity, IPatchLogger
     private async Task<bool> ConfirmRemoval(GameFiles.Installed installed)
     {
         bool ok = await Ask("Remove the game first?",
-            (installed.Patched ? "The game on this phone was patched with a different key (on a PC)." : "The game on this phone is the original from the store.") +
+            (installed.Patched ? "The game on this device was patched with a different key (on a PC)." : "The game on this device is the original from the store.") +
             " Android only accepts the copy patched here after that one is removed, so the app removes it after patching. Android asks you to confirm.\n\n" +
             "Your account, decks and progress are on the server and are not affected. The game's downloaded files come back from the server. The MelonLoader folder stays.",
             "Continue", "Stop");

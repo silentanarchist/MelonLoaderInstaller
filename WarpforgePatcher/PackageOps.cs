@@ -149,8 +149,8 @@ internal static class PackageOps
     {
         PackageInstallStatus.FailureAborted => "It was cancelled.",
         PackageInstallStatus.FailureConflict => "Android refused it because a copy of the game with a different signature is still installed.",
-        PackageInstallStatus.FailureStorage => "There is not enough free space on the phone.",
-        PackageInstallStatus.FailureIncompatible => "Android says the game does not fit this phone (" + message + ").",
+        PackageInstallStatus.FailureStorage => "There is not enough free space on the device.",
+        PackageInstallStatus.FailureIncompatible => "Android says the game does not fit this device (" + message + ").",
         PackageInstallStatus.FailureBlocked => "Android blocked it (" + message + ").",
         _ => $"Android refused it ({status}: {message}).",
     };
