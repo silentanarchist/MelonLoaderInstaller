@@ -11,7 +11,9 @@ internal static class PackageOps
 
     // The install / uninstall currently waiting for an answer from Android. Android's confirmation screen can be closed
     // by tapping outside it, and then Android sometimes sends no answer at all: the app would wait for ever. So the
-    // confirmation is kept, and the screen offers to show it again or to cancel (MainActivity.OnResume).
+    // confirmation is kept, and the job's button turns into "Continue: ..." to show it again (MainActivity.ShowContinue).
+    /// <summary>Told true when Android's confirmation is put up and false when Android answers (from any thread).</summary>
+    public static Action<bool>? ConfirmationState;
     private static TaskCompletionSource<(bool, string)>? pending;
     private static Intent? lastConfirm;
     private static int pendingSession = -1;
@@ -35,7 +37,7 @@ internal static class PackageOps
     }
 
     /// <summary>Gives up waiting: the install session is abandoned and the waiting job ends as cancelled.</summary>
-    public static void Cancel(Activity activity, Action<string> log, string why = "It was cancelled.")
+    private static void Cancel(Activity activity, Action<string> log, string why = "It was cancelled.")
     {
         if (pendingSession >= 0)
         {
@@ -68,7 +70,7 @@ internal static class PackageOps
                 output.Flush();
                 session.Fsync(output);
             }
-            var wait = Listen(activity, log, package == null ? "installing the patched game" : "installing the app update");
+            var wait = Listen(activity, log, package == null ? "install the patched game" : "install the app update");
             pendingSession = id;
             session.Commit(StatusSender(activity, id));
             return wait;
@@ -78,7 +80,7 @@ internal static class PackageOps
     /// <summary>Removes the installed game (Android asks the player to confirm).</summary>
     public static Task<(bool ok, string message)> Uninstall(Activity activity, Action<string> log)
     {
-        var wait = Listen(activity, log, "removing the game");
+        var wait = Listen(activity, log, "remove the original game");
         pendingSession = -1;
         activity.PackageManager!.PackageInstaller.Uninstall(GameFiles.Package, StatusSender(activity, 0x5157));
         return wait;
@@ -108,6 +110,7 @@ internal static class PackageOps
         {
             try { activity.UnregisterReceiver(receiver); } catch { }
             if (ReferenceEquals(pending, done)) { pending = null; lastConfirm = null; pendingSession = -1; }
+            ConfirmationState?.Invoke(false);
         });
         return done.Task;
     }
@@ -130,6 +133,7 @@ internal static class PackageOps
                 if (confirm != null)
                 {
                     lastConfirm = confirm;
+                    ConfirmationState?.Invoke(true);
                     try { activity.StartActivity(confirm); }
                     catch (Exception e) { done.TrySetResult((false, "Could not show Android's confirmation: " + e.Message)); }
                 }

@@ -20,9 +20,13 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
-    private LinearLayout waitPanel = null!;
-    private TextView waitText = null!;
-    private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
+    // The button of the job now running (patch, from-backup or app update). While Android's confirmation is up it reads
+    // "Continue: ..." and is the one button left enabled: pressing it shows the confirmation again (after a tap outside
+    // it closed it). As soon as Android answers it goes back to its own label and is disabled until the job ends.
+    private Button? jobButton;
+    private string jobButtonLabel = "";
+    private bool continueShown;
+    private Button saveArt = null!, checkUpdates = null!, appUpdate = null!, allowFiles = null!, allowInstall = null!, patch = null!, fromBackup = null!, modOnly = null!, stillFix = null!, shareLogs = null!, saveKey = null!, loadKey = null!;
     private CheckBox still = null!;
     private bool busy;
     private StreamWriter? logFile;
@@ -36,6 +40,7 @@ public class MainActivity : Activity, IPatchLogger
         base.OnCreate(savedInstanceState);
         Window!.AddFlags(WindowManagerFlags.KeepScreenOn);
         BuildUi();
+        PackageOps.ConfirmationState = ShowContinue;
         _ = CheckForAppUpdate(manual: false);
         Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default");
     }
@@ -44,16 +49,6 @@ public class MainActivity : Activity, IPatchLogger
     {
         base.OnResume();
         if (!busy) Refresh();
-        // Back on this screen while Android's answer is still outstanding: its confirmation was probably closed by a
-        // tap outside it. Give Android a moment to answer first (a real install can take a few seconds to report).
-        if (PackageOps.WaitingForConfirmation)
-            waitPanel.PostDelayed(() =>
-            {
-                if (!PackageOps.WaitingForConfirmation) return;
-                waitText.Text = $"Still waiting for Android to confirm {PackageOps.WaitingFor}. If its confirmation was closed, show it again, or cancel.";
-                waitPanel.Visibility = ViewStates.Visible;
-            }, 6000);
-        else waitPanel.Visibility = ViewStates.Gone;
     }
 
     // ---------------------------------------------------------------- screen
@@ -87,22 +82,6 @@ public class MainActivity : Activity, IPatchLogger
         status.SetPadding(0, Dp(12), 0, Dp(8));
         top.AddView(status);
 
-        // shown when Android's confirmation was closed without an answer (tap outside it): show it again or cancel
-        waitPanel = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
-        waitPanel.SetBackgroundColor(Color.ParseColor("#2A2418"));
-        waitPanel.SetPadding(Dp(10), Dp(8), Dp(10), Dp(8));
-        waitText = Text("", 14, "#F0DFB0");
-        waitPanel.AddView(waitText);
-        var again = new Button(this) { Text = "Show the confirmation again" };
-        again.SetAllCaps(false);
-        again.Click += (_, _) => { if (PackageOps.ShowConfirmationAgain(this, Log)) waitPanel.Visibility = ViewStates.Gone; };
-        var cancel = new Button(this) { Text = "Cancel" };
-        cancel.SetAllCaps(false);
-        cancel.Click += (_, _) => { PackageOps.Cancel(this, Log); waitPanel.Visibility = ViewStates.Gone; };
-        waitPanel.AddView(again);
-        waitPanel.AddView(cancel);
-        top.AddView(waitPanel);
-
         // shown only when a newer build of this app is on GitHub (AppUpdate)
         appUpdate = Btn("Update this app", () => _ = UpdateApp());
         appUpdate.Visibility = ViewStates.Gone;
@@ -118,12 +97,13 @@ public class MainActivity : Activity, IPatchLogger
         patch = Btn("Patch and install", () => _ = PatchInstalled());
         fromBackup = Btn("Patch from a backup file (.apks / .xapk)", () => PickFile(PickBackup, "*/*", null));
         modOnly = Btn("Update the mod only", () => _ = UpdateModOnly());
+        stillFix = Btn("Apply the black screen fix", () => _ = ToggleStillFix());
         saveArt = Btn("Save card art export to Downloads", () => _ = SaveArt());
         shareLogs = Btn("Share logs", ShareLogs);
         saveKey = Btn("Save a copy of the signing key", () => PickFile(SaveKey, "application/x-pem-file", "warpforge-patcher-key.pem"));
         loadKey = Btn("Load a saved signing key", () => PickFile(LoadKey, "*/*", null));
 
-        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveArt, shareLogs, saveKey, loadKey }) top.AddView(v);
+        foreach (var v in new View[] { allowFiles, allowInstall, still, patch, fromBackup, modOnly, stillFix, saveArt, shareLogs, saveKey, loadKey }) top.AddView(v);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
         root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 3f));
@@ -152,7 +132,11 @@ public class MainActivity : Activity, IPatchLogger
     {
         var b = new Button(this) { Text = text };
         b.SetAllCaps(false);
-        b.Click += (_, _) => { if (!busy) onClick(); };
+        b.Click += (_, _) =>
+        {
+            if (!busy) onClick();
+            else if (continueShown && b == jobButton) PackageOps.ShowConfirmationAgain(this, Log);
+        };
         return b;
     }
 
@@ -257,6 +241,9 @@ public class MainActivity : Activity, IPatchLogger
         fromBackup.Enabled = files && install && !blocked;
         modOnly.Visibility = game?.Patched == true ? ViewStates.Visible : ViewStates.Gone;
         modOnly.Enabled = files && !blocked;
+        // the black screen fix on its own, for an already patched game: on when the mod's LoadingVideo setting is Still
+        stillFix.Visibility = game?.Patched == true && files ? ViewStates.Visible : ViewStates.Gone;
+        stillFix.Text = StillFixOn() ? "Remove the black screen fix" : "Apply the black screen fix";
         saveArt.Visibility = files && File.Exists(ModFiles.ArtExport) ? ViewStates.Visible : ViewStates.Gone;
         appUpdate.Visibility = updateOffer != null ? ViewStates.Visible : ViewStates.Gone;
         if (updateOffer != null)
@@ -295,6 +282,7 @@ public class MainActivity : Activity, IPatchLogger
     {
         var game = GameFiles.FindInstalled(this, OurCertificate());
         if (game == null) { Say("The game is not installed."); return Task.CompletedTask; }
+        jobButton = patch;
         return RunJob("Patching the installed game", async () =>
         {
             ResetWork();
@@ -304,6 +292,7 @@ public class MainActivity : Activity, IPatchLogger
 
     private Task PatchBackup(Android.Net.Uri uri)
     {
+        jobButton = fromBackup;
         return RunJob("Patching from a backup file", async () =>
         {
             ResetWork();
@@ -417,7 +406,13 @@ public class MainActivity : Activity, IPatchLogger
         }
     }
 
-    private Task UpdateApp() => RunJob("Updating this app", async () =>
+    private Task UpdateApp()
+    {
+        jobButton = appUpdate;
+        return UpdateAppJob();
+    }
+
+    private Task UpdateAppJob() => RunJob("Updating this app", async () =>
     {
         var offer = updateOffer ?? throw new UserError("No app update is waiting.");
         if (!PackageManager!.CanRequestPackageInstalls())
@@ -458,6 +453,36 @@ public class MainActivity : Activity, IPatchLogger
         Log($"Done: mod {version} is in place. Close the game fully and start it again.");
     });
 
+    private static bool StillFixOn() =>
+        string.Equals(ModFiles.CurrentSetting("LoadingVideo"), "Still", StringComparison.OrdinalIgnoreCase) && File.Exists(ModFiles.StillFile);
+
+    /// <summary>Turns the black screen fix (the Still picture instead of the loading video) on or off without patching again.</summary>
+    private Task ToggleStillFix() => RunJob(StillFixOn() ? "Removing the black screen fix" : "Applying the black screen fix", async () =>
+    {
+        if (StillFixOn())
+        {
+            ModFiles.SetSetting("LoadingVideo", "Normal", Log);
+            try { File.Delete(ModFiles.StillFile); } catch { }
+            Log("Done: the black screen fix is off; the loading video plays again. Close the game fully and start it again.");
+            return;
+        }
+        var game = GameFiles.FindInstalled(this, null) ?? throw new UserError("The game is not installed.");
+        if (!File.Exists(ModFiles.StillFile))
+        {
+            // its own folder: the work folder may hold patched files kept for a retry
+            string dir = System.IO.Path.Combine(CacheDir!.AbsolutePath, "still");
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var rgba = await Task.Run(() => ModFiles.MakeStill(game.Parts.Base, dir, Log));
+                ModFiles.PutStill(rgba, Log);
+            }
+            finally { try { Directory.Delete(dir, true); } catch { } }
+        }
+        ModFiles.SetSetting("LoadingVideo", "Still", Log);
+        Log("Done: the black screen fix is on. Close the game fully and start it again.");
+    });
+
     private async Task RunJob(string what, Func<Task> job)
     {
         busy = true;
@@ -471,15 +496,35 @@ public class MainActivity : Activity, IPatchLogger
         finally
         {
             busy = false;
-            waitPanel.Visibility = ViewStates.Gone;
+            ShowContinue(false);
+            jobButton = null;
             SetButtons(true);
             Refresh();
         }
     }
 
+    /// <summary>Called by PackageOps (any thread) when Android's confirmation is put up (true) and when Android answers (false).</summary>
+    private void ShowContinue(bool waiting) => RunOnUiThread(() =>
+    {
+        if (jobButton == null) return;
+        if (waiting && !continueShown)
+        {
+            jobButtonLabel = jobButton.Text ?? "";
+            jobButton.Text = "Continue: " + PackageOps.WaitingFor;
+            jobButton.Enabled = true;
+            continueShown = true;
+        }
+        else if (!waiting && continueShown)
+        {
+            jobButton.Text = jobButtonLabel;
+            jobButton.Enabled = !busy;
+            continueShown = false;
+        }
+    });
+
     private void SetButtons(bool on)
     {
-        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, saveArt, saveKey, loadKey }) b.Enabled = on;
+        foreach (var b in new View[] { checkUpdates, appUpdate, allowFiles, allowInstall, still, patch, fromBackup, modOnly, stillFix, saveArt, saveKey, loadKey }) b.Enabled = on;
     }
 
     private void ResetWork()
