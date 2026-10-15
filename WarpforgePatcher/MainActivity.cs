@@ -307,7 +307,7 @@ public class MainActivity : Activity, IPatchLogger
                       : "Apply the black screen fix";
         string? server = files ? ModFiles.CurrentSetting("ServerUrl") : null;
         serverInfo.Text = !files ? "Needs access to the loader's folder (Patcher page)."
-                        : string.IsNullOrWhiteSpace(server) || string.Equals(server.Trim(), ModFiles.DefaultServer, StringComparison.OrdinalIgnoreCase)
+                        : ModFiles.IsCommunityServer(server)
                             ? $"Now: {ModFiles.DefaultServer} (the community server)"
                             : $"Now: {server!.Trim()}";
         setServer.Enabled = files;
@@ -528,7 +528,7 @@ public class MainActivity : Activity, IPatchLogger
     private void ChangeServer()
     {
         string current = ModFiles.CurrentSetting("ServerUrl")?.Trim() ?? "";
-        var input = new EditText(this) { Text = current.Length > 0 ? current : ModFiles.DefaultServer };
+        var input = new EditText(this) { Text = ModFiles.IsCommunityServer(current) ? ModFiles.DefaultServer : current };
         input.SetSingleLine(true);
         input.InputType = Android.Text.InputTypes.ClassText | Android.Text.InputTypes.TextVariationUri;
         var box = new FrameLayout(this);

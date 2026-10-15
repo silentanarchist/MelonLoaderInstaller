@@ -11,7 +11,18 @@ namespace WarpforgePatcher;
 /// <summary>What "3 - put mod on phone.bat", "6 - fix loading video.bat" (the Still picture) and "7 - loading video setting.bat" do, on the phone.</summary>
 internal static class ModFiles
 {
-    public const string DefaultServer = "warpforge.silentanarchist.com";   // the mod's RevivalConfig.DefaultServer
+    public const string DefaultServer = "wf-revival.silentanarchist.com";   // the mod's RevivalConfig.DefaultServer (mod 0.13.28 on)
+    /// <summary>The community server's earlier name (the mod's RevivalConfig.OldServer): the same server. A settings file that
+    /// still names it counts as the community server; the new name is asked first and the old one only if it does not answer.</summary>
+    public const string OldServer = "warpforge.silentanarchist.com";
+
+    /// <summary>True when the address is blank or names the community server by its new or its old name.</summary>
+    public static bool IsCommunityServer(string? value)
+    {
+        string t = (value ?? "").Trim().TrimEnd('/').ToLowerInvariant();
+        foreach (var prefix in new[] { "https://", "http://" }) if (t.StartsWith(prefix)) t = t.Substring(prefix.Length);
+        return t.Length == 0 || t == DefaultServer || t == OldServer;
+    }
     public const int Port = 8780;
 
     public static string ModsDir => System.IO.Path.Combine(GameFiles.LoaderDir, "Mods");
@@ -21,19 +32,29 @@ internal static class ModFiles
     public static string LatestLog => System.IO.Path.Combine(GameFiles.LoaderDir, "Latest.log");
 
     /// <summary>The server the mod uses: ServerUrl from its settings file when set, else the community server. Always https.</summary>
-    public static string ServerBase()
+    public static string ServerBase() => ServerBases()[0];
+
+    /// <summary>The addresses to try, in order: the configured server, or the community server's new name and then its old one.</summary>
+    public static string[] ServerBases()
     {
-        string value = "";
+        string configured = "";
         try
         {
             if (File.Exists(ConfigFile))
             {
                 var m = Regex.Match(File.ReadAllText(ConfigFile), "(?m)^\\s*ServerUrl\\s*=\\s*\"([^\"]*)\"");
-                if (m.Success) value = m.Groups[1].Value.Trim().TrimEnd('/');
+                if (m.Success) configured = m.Groups[1].Value;
             }
         }
         catch { }
-        if (value.Length == 0) value = DefaultServer;
+        return IsCommunityServer(configured)
+            ? new[] { Https(DefaultServer), Https(OldServer) }
+            : new[] { Https(configured) };
+    }
+
+    private static string Https(string written)
+    {
+        string value = written.Trim().TrimEnd('/');
         if (value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return value;
         if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) value = value.Substring(7);
         // like the mod: the game port unless one is written (this app never falls back to plain http)
@@ -45,11 +66,21 @@ internal static class ModFiles
     /// <summary>Downloads the current Android mod and checks it against the server's checksum.</summary>
     public static async Task<(string path, string version)> DownloadMod(string workDir, Action<string> log)
     {
-        string server = ServerBase();
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("WarpforgePatcher/1");
-        log($"Asking {server} for the current mod");
-        using var manifest = JsonDocument.Parse(await http.GetStringAsync(server + "/api/v1/mod/manifest?platform=android"));
+        string server = "", manifestText = "";
+        var servers = ServerBases();
+        for (int i = 0; i < servers.Length; i++)
+        {
+            server = servers[i];
+            log($"Asking {server} for the current mod");
+            try { manifestText = await http.GetStringAsync(server + "/api/v1/mod/manifest?platform=android"); break; }
+            catch (Exception e) when (i + 1 < servers.Length && e is HttpRequestException or TaskCanceledException)
+            {
+                log($"{server} did not answer ({e.Message}); trying the server's earlier name");
+            }
+        }
+        using var manifest = JsonDocument.Parse(manifestText);
         var root = manifest.RootElement;
         if (!root.TryGetProperty("available", out var available) || !available.GetBoolean())
             throw new UserError("The server has no Android mod to hand out right now.");

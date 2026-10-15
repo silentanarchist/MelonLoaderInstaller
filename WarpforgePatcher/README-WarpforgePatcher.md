@@ -39,7 +39,8 @@ test APK); peak memory for the large file went from out-of-memory to about 50 MB
    1440x810, bottom row first, raw RGBA (4,665,600 bytes).
 4. Downloads the current Android mod from the server (`/api/v1/mod/manifest?platform=android`, the
    checksum must match). The server is the `ServerUrl` in the mod's settings file when there is one,
-   else `warpforge.silentanarchist.com`, always over https on port 8780.
+   else the community server `wf-revival.silentanarchist.com` (its earlier name `warpforge.silentanarchist.com` is tried if
+   the new one does not answer), always over https on port 8780.
 5. Patches with the core.
 6. If the installed game is not signed with this app's key (the store original, or a PC-patched copy),
    asks before patching, then removes it through Android's own uninstall prompt. Its downloaded files
