@@ -11,7 +11,7 @@
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
     <ApplicationTitle>Warpforge Patcher</ApplicationTitle>
     <ApplicationVersion>15</ApplicationVersion>
-    <ApplicationDisplayVersion>0.2.9</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>0.3.0</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- the loader package is already a zip; storing it as-is keeps the build quick -->
