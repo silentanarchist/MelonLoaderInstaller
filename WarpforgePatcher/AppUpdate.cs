@@ -7,10 +7,13 @@ using Android.Content.PM;
 namespace WarpforgePatcher;
 
 /// <summary>
-/// Updates this app from its own GitHub releases (silentanarchist/warpforge-revival-mod-android, tags patcher-v&lt;version&gt;),
+/// Updates this app from its own GitHub releases (silentanarchist/warpforge-revival-mod, tags patcher-v&lt;version&gt;;
+/// up to 0.2.8 they were also published in silentanarchist/warpforge-revival-mod-android, which 0.2.7 and older read),
 /// so a new build reaches players without them downloading and reinstalling the APK by hand.
 ///
 /// Checked once per start. The newest non-draft, non-pre-release "patcher-v" release newer than this build is offered.
+/// The repository also holds the mod's frequent releases, so the patcher's are found by their tags (git/matching-refs)
+/// and then read one by one (releases/tags/...), newest first.
 /// Its APK is downloaded and accepted only when
 ///  - its SHA-256 matches the one written in the release notes ("SHA-256 of the APK: `...`", as patcher-release.yml writes them),
 ///  - it is this app's package, with a higher version code, signed with the same certificate as this installed app.
@@ -21,7 +24,10 @@ namespace WarpforgePatcher;
 /// </summary>
 internal static class AppUpdate
 {
-    private const string Releases = "https://api.github.com/repos/silentanarchist/warpforge-revival-mod-android/releases?per_page=30";
+    private const string Repo = "silentanarchist/warpforge-revival-mod";
+    private const string Tags = "https://api.github.com/repos/" + Repo + "/git/matching-refs/tags/patcher-v";
+    private const string ReleaseByTag = "https://api.github.com/repos/" + Repo + "/releases/tags/";
+    private const string Downloads = "https://github.com/" + Repo + "/releases/download/";
 
     public sealed class Offer
     {
@@ -43,15 +49,24 @@ internal static class AppUpdate
         try
         {
             using var http = Client(TimeSpan.FromSeconds(20));
-            using var doc = JsonDocument.Parse(await http.GetStringAsync(Releases));
+            var current = Current(context);
+            var versions = new List<(Version v, string tag)>();
+            using (var refs = JsonDocument.Parse(await http.GetStringAsync(Tags)))
+                foreach (var r in refs.RootElement.EnumerateArray())
+                {
+                    string tag = (r.GetProperty("ref").GetString() ?? "").Replace("refs/tags/", "");
+                    if (tag.StartsWith("patcher-v", StringComparison.Ordinal) && Version.TryParse(tag.Substring("patcher-v".Length), out var v) && v > current)
+                        versions.Add((v, tag));
+                }
             Offer? best = null;
-            foreach (var r in doc.RootElement.EnumerateArray())
+            foreach (var (v, tag) in versions.OrderByDescending(x => x.v).Take(5))
             {
-                string tag = r.GetProperty("tag_name").GetString() ?? "";
-                if (!tag.StartsWith("patcher-v", StringComparison.Ordinal)) continue;
+                using var reply = await http.GetAsync(ReleaseByTag + tag);
+                if (reply.StatusCode == System.Net.HttpStatusCode.NotFound) continue;     // a tag without a published release
+                reply.EnsureSuccessStatusCode();
+                using var doc = JsonDocument.Parse(await reply.Content.ReadAsStringAsync());
+                var r = doc.RootElement;
                 if (r.GetProperty("draft").GetBoolean() || r.GetProperty("prerelease").GetBoolean()) continue;
-                if (!Version.TryParse(tag.Substring("patcher-v".Length), out var v)) continue;
-                if (best != null && v <= best.Version) continue;
                 string body = r.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
                 var sha = Regex.Match(body, @"SHA-256 of the APK:\s*`([0-9a-fA-F]{64})`");
                 foreach (var a in r.GetProperty("assets").EnumerateArray())
@@ -69,10 +84,10 @@ internal static class AppUpdate
                     };
                     break;
                 }
+                if (best != null) break;
             }
-            var current = Current(context);
             if (best == null || best.Version <= current) { log($"App is up to date ({current})"); return (null, null); }
-            if (!best.ApkUrl.StartsWith("https://github.com/silentanarchist/warpforge-revival-mod-android/releases/download/", StringComparison.Ordinal))
+            if (!best.ApkUrl.StartsWith(Downloads, StringComparison.Ordinal))
             {
                 log("Update check: the release's APK is not on this project's GitHub page; ignored");
                 return (null, null);

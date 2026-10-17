@@ -1,7 +1,7 @@
 # Warpforge Revival Patcher (Android app)
 
 Patches the player's own copy of *Warhammer 40,000: Warpforge* on the phone itself, without a PC,
-cable or adb, for the [Warpforge Revival](https://github.com/silentanarchist/warpforge-revival-mod-android)
+cable or adb, for the [Warpforge Revival](https://github.com/silentanarchist/warpforge-revival-mod)
 project. It does what the PC scripts in that repo's `patcher/` folder do (`1 - patch.bat`,
 `2 - install on phone.bat`, `3 - put mod on phone.bat`, and the Still picture of
 `6 - fix loading video.bat` with `7 - loading video setting.bat`).
