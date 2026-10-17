@@ -93,6 +93,25 @@ internal static class ModFiles
         string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
         if (sha.Length != 64 || got != sha)
             throw new UserError("The downloaded mod does not match the server's checksum; nothing was changed.");
+        // the owner's signature (mod 0.14.0 on): the server's checksum cannot vouch for a build if the server itself
+        // was broken into, the signature can. The file is kept exactly as downloaded, signature included.
+        string? refused = ModSignature.Check(data, ModSignature.AndroidFileName, out string? signedVersion);
+        if (refused != null)
+        {
+            log("Mod refused: " + refused);
+            throw new UserError($"The mod from the server was refused: {refused}. Only mod builds signed by the Warpforge Revival project are installed; nothing was changed.");
+        }
+        log($"Mod signature OK ({signedVersion})");
+        if (signedVersion != null && File.Exists(ModFile))
+        {
+            string? onDevice = ModSignature.VersionOfFile(ModFile);
+            if (onDevice != null && ModSignature.CompareVersions(signedVersion, onDevice) < 0)
+            {
+                log($"Mod refused: {signedVersion} is older than {onDevice} on the device");
+                throw new UserError($"The server's mod ({signedVersion}) is older than the one on this device ({onDevice}); nothing was changed.");
+            }
+        }
+        if (signedVersion != null) version = signedVersion;
         string path = System.IO.Path.Combine(workDir, "WarpforgeRevival.Android.dll");
         await File.WriteAllBytesAsync(path, data);
         log($"Mod {version} downloaded ({data.Length / 1024} KB, checksum OK)");

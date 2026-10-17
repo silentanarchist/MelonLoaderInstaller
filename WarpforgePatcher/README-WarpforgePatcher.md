@@ -41,6 +41,9 @@ test APK); peak memory for the large file went from out-of-memory to about 50 MB
    checksum must match). The server is the `ServerUrl` in the mod's settings file when there is one,
    else the community server `wf-revival.silentanarchist.com` (its earlier name `warpforge.silentanarchist.com` is tried if
    the new one does not answer), always over https on port 8780.
+   The build must also carry the project owner's Ed25519 signature (mod 0.14.0 on; `ModSignature.cs`, the
+   same check as the mod's updater, with `Ed25519.cs` copied from the mod), or it is refused; a build older
+   than the one on the device is refused too. It is installed exactly as downloaded, signature included.
 5. Patches with the core.
 6. If the installed game is not signed with this app's key (the store original, or a PC-patched copy),
    asks before patching, then removes it through Android's own uninstall prompt. Its downloaded files
