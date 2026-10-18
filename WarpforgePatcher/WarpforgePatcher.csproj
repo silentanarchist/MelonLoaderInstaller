@@ -23,6 +23,10 @@
   <ItemGroup Condition="'$(BundleLoader)' == 'true'">
     <AndroidAsset Include="$(MelonDataZip)" Link="Assets/melon_data.zip" />
   </ItemGroup>
+  <!-- the app's translations: copies of the mod repo's localization/patcher/<code>.json (build.sh refreshes them) -->
+  <ItemGroup>
+    <AndroidAsset Include="Localization/*.json" Exclude="Localization/en.json" Link="Assets/localization/%(Filename)%(Extension)" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/MelonLoader.Installer.Core.csproj" />
     <PackageReference Include="Xamarin.AndroidX.Core" Version="1.13.1.4" />

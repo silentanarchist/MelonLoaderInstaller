@@ -14,14 +14,14 @@ internal static class PackageOps
     // confirmation is kept, and the job's button turns into "Continue: ..." to show it again (MainActivity.ShowContinue).
     /// <summary>Told true when Android's confirmation is put up and false when Android answers (from any thread).</summary>
     public static Action<bool>? ConfirmationState;
-    private static TaskCompletionSource<(bool, string)>? pending;
+    private static TaskCompletionSource<(bool, LocText)>? pending;
     private static Intent? lastConfirm;
     private static int pendingSession = -1;
-    private static string pendingWhat = "";
+    private static LocText pendingWhat = new("", "");
 
     /// <summary>True while an install or uninstall waits for Android and its confirmation has been shown at least once.</summary>
     public static bool WaitingForConfirmation => pending != null && !pending.Task.IsCompleted && lastConfirm != null;
-    public static string WaitingFor => pendingWhat;
+    public static LocText WaitingFor => pendingWhat;
 
     /// <summary>Shows Android's confirmation again (after it was closed by a tap outside it).</summary>
     public static bool ShowConfirmationAgain(Activity activity, Action<string> log)
@@ -31,13 +31,13 @@ internal static class PackageOps
         catch (Exception e)
         {
             log("Android's confirmation could not be shown again: " + e.Message);
-            Cancel(activity, log, "Android's confirmation is no longer available. Press the button again to start over.");
+            Cancel(activity, log, new LocText("confirm.gone", "Android's confirmation is no longer available. Press the button again to start over."));
             return false;
         }
     }
 
     /// <summary>Gives up waiting: the install session is abandoned and the waiting job ends as cancelled.</summary>
-    private static void Cancel(Activity activity, Action<string> log, string why = "It was cancelled.")
+    private static void Cancel(Activity activity, Action<string> log, LocText? why = null)
     {
         if (pendingSession >= 0)
         {
@@ -45,11 +45,11 @@ internal static class PackageOps
             pendingSession = -1;
         }
         log("Stopped waiting for Android's confirmation");
-        pending?.TrySetResult((false, why));
+        pending?.TrySetResult((false, why ?? new LocText("install.cancelled", "It was cancelled.")));
     }
 
     /// <summary>Installs all patched APKs together as one app (they are splits of one package).</summary>
-    public static Task<(bool ok, string message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
+    public static Task<(bool ok, LocText message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
     {
         var installer = activity.PackageManager!.PackageInstaller;
         var p = new PackageInstaller.SessionParams(PackageInstallMode.FullInstall);
@@ -70,7 +70,7 @@ internal static class PackageOps
                 output.Flush();
                 session.Fsync(output);
             }
-            var wait = Listen(activity, log, package == null ? "install the patched game" : "install the app update");
+            var wait = Listen(activity, log, package == null ? new LocText("confirm.installGame", "install the patched game") : new LocText("confirm.installUpdate", "install the app update"));
             pendingSession = id;
             session.Commit(StatusSender(activity, id));
             return wait;
@@ -78,9 +78,9 @@ internal static class PackageOps
     }
 
     /// <summary>Removes the installed game (Android asks the player to confirm).</summary>
-    public static Task<(bool ok, string message)> Uninstall(Activity activity, Action<string> log)
+    public static Task<(bool ok, LocText message)> Uninstall(Activity activity, Action<string> log)
     {
-        var wait = Listen(activity, log, "remove the original game");
+        var wait = Listen(activity, log, new LocText("confirm.removeGame", "remove the original game"));
         pendingSession = -1;
         activity.PackageManager!.PackageInstaller.Uninstall(GameFiles.Package, StatusSender(activity, 0x5157));
         return wait;
@@ -94,9 +94,9 @@ internal static class PackageOps
         return PendingIntent.GetBroadcast(context, requestCode, intent, flags)!.IntentSender;
     }
 
-    private static Task<(bool ok, string message)> Listen(Activity activity, Action<string> log, string what)
+    private static Task<(bool ok, LocText message)> Listen(Activity activity, Action<string> log, LocText what)
     {
-        var done = new TaskCompletionSource<(bool, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var done = new TaskCompletionSource<(bool, LocText)>(TaskCreationOptions.RunContinuationsAsynchronously);
         pending = done;
         lastConfirm = null;
         pendingWhat = what;
@@ -115,7 +115,7 @@ internal static class PackageOps
         return done.Task;
     }
 
-    private sealed class StatusReceiver(Activity activity, TaskCompletionSource<(bool, string)> done, Action<string> log) : BroadcastReceiver
+    private sealed class StatusReceiver(Activity activity, TaskCompletionSource<(bool, LocText)> done, Action<string> log) : BroadcastReceiver
     {
         public override void OnReceive(Context? context, Intent? intent)
         {
@@ -135,23 +135,23 @@ internal static class PackageOps
                     lastConfirm = confirm;
                     ConfirmationState?.Invoke(true);
                     try { activity.StartActivity(confirm); }
-                    catch (Exception e) { done.TrySetResult((false, "Could not show Android's confirmation: " + e.Message)); }
+                    catch (Exception e) { done.TrySetResult((false, new LocText("install.noConfirm", "Could not show Android's confirmation: {error}", ("error", e.Message)))); }
                 }
                 return;
             }
             bool ok = status == PackageInstallStatus.Success;
             if (!ok) log($"Android answered: {status} {message}");
-            done.TrySetResult((ok, ok ? "" : Explain(status, message)));
+            done.TrySetResult((ok, ok ? new LocText("", "") : Explain(status, message)));
         }
     }
 
-    private static string Explain(PackageInstallStatus status, string message) => status switch
+    private static LocText Explain(PackageInstallStatus status, string message) => status switch
     {
-        PackageInstallStatus.FailureAborted => "It was cancelled.",
-        PackageInstallStatus.FailureConflict => "Android refused it because a copy of the game with a different signature is still installed.",
-        PackageInstallStatus.FailureStorage => "There is not enough free space on the device.",
-        PackageInstallStatus.FailureIncompatible => "Android says the game does not fit this device (" + message + ").",
-        PackageInstallStatus.FailureBlocked => "Android blocked it (" + message + ").",
-        _ => $"Android refused it ({status}: {message}).",
+        PackageInstallStatus.FailureAborted => new LocText("install.cancelled", "It was cancelled."),
+        PackageInstallStatus.FailureConflict => new LocText("install.conflict", "Android refused it because a copy of the game with a different signature is still installed."),
+        PackageInstallStatus.FailureStorage => new LocText("install.storage", "There is not enough free space on the device."),
+        PackageInstallStatus.FailureIncompatible => new LocText("install.incompatible", "Android says the game does not fit this device ({details}).", ("details", message)),
+        PackageInstallStatus.FailureBlocked => new LocText("install.blocked", "Android blocked it ({details}).", ("details", message)),
+        _ => new LocText("install.refused", "Android refused it ({status}: {details}).", ("status", status), ("details", message)),
     };
 }

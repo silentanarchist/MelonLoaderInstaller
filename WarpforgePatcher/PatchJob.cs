@@ -42,10 +42,10 @@ internal static class PatchJob
             AssetRipper.Primitives.UnityVersion.Parse(GameFiles.UnityVersion), GameFiles.Package, true);
         bool ok = new Patcher(args, log).Run();
         try { Directory.Delete(temp, true); } catch { }
-        if (!ok) throw new UserError("Patching did not finish. The log above says where it stopped.");
+        if (!ok) throw new UserError("err.patchFailed", "Patching did not finish. The log below says where it stopped.");
 
         string[] apks = Directory.GetFiles(outDir, "*.apk");
-        if (apks.Length < 3) throw new UserError("Patching left fewer files than expected: " + string.Join(", ", apks.Select(Path.GetFileName)));
+        if (apks.Length < 3) throw new UserError("err.patchFewFiles", "Patching left fewer files than expected: {files}", ("files", string.Join(", ", apks.Select(Path.GetFileName))));
         return apks;
     }
 }

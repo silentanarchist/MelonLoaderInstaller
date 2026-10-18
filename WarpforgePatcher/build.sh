@@ -11,6 +11,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 repo="${1:?path to warpforge-revival-mod-android}"
 mkdir -p "$here/loader"
 cat "$repo"/patcher/tool/melon_data.zip.part* > "$here/loader/melon_data.zip"
+# translations: the mod repo's localization/patcher/ is the source (LOCALIZATION=<that folder>, or the mod repo next to
+# this one); the copies in Localization/ are what gets built in, and are committed so the source builds on its own
+loc="${LOCALIZATION:-$here/../../warpforge-revival-mod/localization/patcher}"
+if [ -d "$loc" ]; then
+  mkdir -p "$here/Localization"
+  cp "$loc"/*.json "$here/Localization/"
+  echo "translations from $loc: $(ls "$loc" | tr '\n' ' ')"
+else
+  echo "translations: $loc not found; building with the copies in Localization/"
+fi
 sign=""
 if [ -n "$2" ]; then
   pass="$(cat "${3:?password file}")"

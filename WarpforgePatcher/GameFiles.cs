@@ -103,13 +103,13 @@ internal static class GameFiles
         using var zip = new ZipArchive(backup, ZipArchiveMode.Read);
         var apks = zip.Entries.Where(e => e.FullName.EndsWith(".apk", StringComparison.OrdinalIgnoreCase) && !e.FullName.Contains('/')).ToList();
         if (apks.Count == 0)
-            throw new UserError("That file holds no .apk files. Pick the game's .apks or .xapk backup.");
+            throw new UserError("err.backupNoApk", "That file holds no .apk files. Pick the game's .apks or .xapk backup.");
 
         ZipArchiveEntry? main = apks.FirstOrDefault(e => e.Name.Equals(Package + ".apk", StringComparison.OrdinalIgnoreCase))
                              ?? apks.FirstOrDefault(e => e.Name.Equals("base.apk", StringComparison.OrdinalIgnoreCase));
         ZipArchiveEntry? arm64 = apks.FirstOrDefault(e => e.Name.Contains("arm64", StringComparison.OrdinalIgnoreCase));
         if (main == null || arm64 == null)
-            throw new UserError("The backup is missing the game's main file or its arm64 code file. Found: " + string.Join(", ", apks.Select(e => e.Name)));
+            throw new UserError("err.backupIncomplete", "The backup is missing the game's main file or its arm64 code file. Found: {files}", ("files", string.Join(", ", apks.Select(e => e.Name))));
 
         foreach (var e in apks)
         {
@@ -133,4 +133,11 @@ internal static class GameFiles
 }
 
 /// <summary>A problem to show the player as it is, without a stack trace.</summary>
-internal sealed class UserError(string message) : Exception(message);
+/// <summary>A problem to tell the player about: shown in their language, logged in English (Message).</summary>
+internal sealed class UserError : Exception
+{
+    public LocText Text { get; }
+    public UserError(string key, string english, params (string name, object? value)[] args) : this(new LocText(key, english, args)) { }
+    public UserError(LocText text) : base(text.English) { Text = text; }
+    public string Shown => Text.Shown;
+}

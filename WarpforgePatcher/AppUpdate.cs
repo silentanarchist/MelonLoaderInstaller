@@ -106,7 +106,7 @@ internal static class AppUpdate
     public static async Task<string> Download(Context context, Offer offer, Action<string> log)
     {
         if (offer.Sha256.Length != 64)
-            throw new UserError("That release has no checksum for its APK, so the app will not install it. Download it from the releases page instead.");
+            throw new UserError("update.noChecksum", "That release has no checksum for its APK, so the app will not install it. Download it from the releases page instead.");
         string dir = Path.Combine(context.CacheDir!.AbsolutePath, "app-update");
         if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Directory.CreateDirectory(dir);
@@ -126,20 +126,20 @@ internal static class AppUpdate
         if (got != offer.Sha256)
         {
             File.Delete(path);
-            throw new UserError("The downloaded update does not match the checksum in its release notes; nothing was installed.");
+            throw new UserError("update.badChecksum", "The downloaded update does not match the checksum in its release notes; nothing was installed.");
         }
 
         // the same app, a newer build, signed with the same key as this one
         var pm = context.PackageManager!;
         var flags = OperatingSystem.IsAndroidVersionAtLeast(28) ? PackageInfoFlags.SigningCertificates : PackageInfoFlags.Signatures;
-        var info = pm.GetPackageArchiveInfo(path, flags) ?? throw new UserError("The downloaded update is not a readable app package.");
+        var info = pm.GetPackageArchiveInfo(path, flags) ?? throw new UserError("update.unreadable", "The downloaded update is not a readable app package.");
         var me = pm.GetPackageInfo(context.PackageName!, flags)!;
         if (info.PackageName != context.PackageName)
-            throw new UserError("The downloaded update is a different app; nothing was installed.");
+            throw new UserError("update.otherApp", "The downloaded update is a different app; nothing was installed.");
         if (VersionCode(info) <= VersionCode(me))
-            throw new UserError("The downloaded update is not newer than this app; nothing was installed.");
+            throw new UserError("update.notNewer", "The downloaded update is not newer than this app; nothing was installed.");
         if (!SameSigner(Certs(info), Certs(me)))
-            throw new UserError("The downloaded update is not signed with this app's key; nothing was installed.");
+            throw new UserError("update.otherKey", "The downloaded update is not signed with this app's key; nothing was installed.");
         log($"Update {info.VersionName} checked (checksum, package, version, signature)");
         return path;
     }

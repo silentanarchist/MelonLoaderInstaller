@@ -58,7 +58,7 @@ internal static class LoaderPackage
                 }
                 using var _ = reply;
                 if (!reply.IsSuccessStatusCode)
-                    throw new UserError($"Could not download the loader package from GitHub ({(int)reply.StatusCode}). Check the connection and try again.");
+                    throw new UserError("err.loaderDownload", "Could not download the loader package from GitHub ({code}). Check the connection and try again.", ("code", (int)reply.StatusCode));
                 await using var s = await reply.Content.ReadAsStreamAsync();
                 await s.CopyToAsync(output);
             }
@@ -66,7 +66,7 @@ internal static class LoaderPackage
         if (Hash(temp) != Sha256)
         {
             File.Delete(temp);
-            throw new UserError("The downloaded loader package does not match its checksum; nothing was changed. Try again later.");
+            throw new UserError("err.loaderChecksum", "The downloaded loader package does not match its checksum; nothing was changed. Try again later.");
         }
         File.Move(temp, cached, true);
         File.Copy(cached, dest, true);

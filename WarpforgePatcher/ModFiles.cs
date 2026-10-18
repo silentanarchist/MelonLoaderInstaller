@@ -83,23 +83,23 @@ internal static class ModFiles
         using var manifest = JsonDocument.Parse(manifestText);
         var root = manifest.RootElement;
         if (!root.TryGetProperty("available", out var available) || !available.GetBoolean())
-            throw new UserError("The server has no Android mod to hand out right now.");
+            throw new UserError("mod.noneOnServer", "The server has no Android mod to hand out right now.");
         string version = root.TryGetProperty("label", out var v) ? v.GetString() ?? "" : (root.TryGetProperty("version", out var v2) ? v2.GetString() ?? "" : "");
         string sha = (root.GetProperty("sha256").GetString() ?? "").ToLowerInvariant();
         string url = root.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
         if (url.Length == 0) url = "/api/v1/mod/download?platform=android";
-        if (!url.StartsWith("/", StringComparison.Ordinal)) throw new UserError("The server's mod address is not on the server itself; refused.");
+        if (!url.StartsWith("/", StringComparison.Ordinal)) throw new UserError("mod.foreignUrl", "The server's mod address is not on the server itself; refused.");
         byte[] data = await http.GetByteArrayAsync(server + url);
         string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
         if (sha.Length != 64 || got != sha)
-            throw new UserError("The downloaded mod does not match the server's checksum; nothing was changed.");
+            throw new UserError("mod.badChecksum", "The downloaded mod does not match the server's checksum; nothing was changed.");
         // the owner's signature (mod 0.14.0 on): the server's checksum cannot vouch for a build if the server itself
         // was broken into, the signature can. The file is kept exactly as downloaded, signature included.
         string? refused = ModSignature.Check(data, ModSignature.AndroidFileName, out string? signedVersion);
         if (refused != null)
         {
             log("Mod refused: " + refused);
-            throw new UserError($"The mod from the server was refused: {refused}. Only mod builds signed by the Warpforge Revival project are installed; nothing was changed.");
+            throw new UserError("mod.refused", "The mod from the server was refused: {reason}. Only mod builds signed by the Warpforge Revival project are installed; nothing was changed.", ("reason", RefusedReason(refused)));
         }
         log($"Mod signature OK ({signedVersion})");
         if (signedVersion != null && File.Exists(ModFile))
@@ -108,7 +108,7 @@ internal static class ModFiles
             if (onDevice != null && ModSignature.CompareVersions(signedVersion, onDevice) < 0)
             {
                 log($"Mod refused: {signedVersion} is older than {onDevice} on the device");
-                throw new UserError($"The server's mod ({signedVersion}) is older than the one on this device ({onDevice}); nothing was changed.");
+                throw new UserError("mod.older", "The server's mod ({server}) is older than the one on this device ({device}); nothing was changed.", ("server", signedVersion), ("device", onDevice));
             }
         }
         if (signedVersion != null) version = signedVersion;
@@ -117,6 +117,17 @@ internal static class ModFiles
         log($"Mod {version} downloaded ({data.Length / 1024} KB, checksum OK)");
         return (path, version);
     }
+
+    /// <summary>ModSignature's reason (English, as the mod's own check words it) as a text for the player.</summary>
+    private static LocText RefusedReason(string reason) => reason switch
+    {
+        "the download is too small" => new LocText("mod.reason.small", "the download is too small"),
+        "the download is not signed" => new LocText("mod.reason.unsigned", "the download is not signed"),
+        "the download names no version" => new LocText("mod.reason.noVersion", "the download names no version"),
+        "the signature does not match" => new LocText("mod.reason.badSignature", "the signature does not match"),
+        "the download is signed with a key this app does not know" => new LocText("mod.reason.unknownKey", "the download is signed with a key this app does not know"),
+        _ => new LocText("mod.reason.other", "{reason}", ("reason", reason)),
+    };
 
     /// <summary>Puts the mod in the loader's Mods folder; older test files are moved aside as the PC script does.</summary>
     public static void PutMod(string downloaded, Action<string> log)
@@ -150,7 +161,7 @@ internal static class ModFiles
         byte[] data;
         using (var zip = ZipFile.OpenRead(baseApk))
         {
-            var entry = zip.GetEntry("assets/bin/Data/sharedassets0.resource") ?? throw new UserError("The game file has no loading video (sharedassets0.resource).");
+            var entry = zip.GetEntry("assets/bin/Data/sharedassets0.resource") ?? throw new UserError("still.noVideo", "The game file has no loading video (sharedassets0.resource).");
             using var s = entry.Open();
             using var ms = new MemoryStream();
             s.CopyTo(ms);
@@ -164,9 +175,9 @@ internal static class ModFiles
         using var retriever = new MediaMetadataRetriever();
         retriever.SetDataSource(clip);
         long durationMs = long.TryParse(retriever.ExtractMetadata(MetadataKey.Duration), out long d) ? d : 0;
-        if (durationMs <= 0) throw new UserError("Could not read the loading video's length.");
+        if (durationMs <= 0) throw new UserError("still.noLength", "Could not read the loading video's length.");
         using var frame = retriever.GetFrameAtTime(Math.Max(0, durationMs - 200) * 1000, Option.Closest)
-                          ?? throw new UserError("Could not take the loading video's last frame.");
+                          ?? throw new UserError("still.noFrame", "Could not take the loading video's last frame.");
         using var scaled = Bitmap.CreateScaledBitmap(frame, 1440, 810, true)!;
         using var argb = scaled.GetConfig() == Bitmap.Config.Argb8888 ? null : scaled.Copy(Bitmap.Config.Argb8888!, false);
         var bmp = argb ?? scaled;
@@ -188,7 +199,7 @@ internal static class ModFiles
     private static (long start, long length) FindMp4(byte[] data)
     {
         int at = IndexOf(data, System.Text.Encoding.ASCII.GetBytes("ftyp"));
-        if (at < 4) throw new UserError("No loading video found in the game file.");
+        if (at < 4) throw new UserError("still.notFound", "No loading video found in the game file.");
         long start = at - 4, pos = start;
         bool sawMoov = false;
         while (pos + 8 <= data.Length)
@@ -201,7 +212,7 @@ internal static class ModFiles
             pos += size;
         }
         long length = pos - start;
-        if (!sawMoov || length < 100000) throw new UserError("The loading video in the game file looks incomplete.");
+        if (!sawMoov || length < 100000) throw new UserError("still.incomplete", "The loading video in the game file looks incomplete.");
         return (start, length);
     }
 
@@ -269,15 +280,15 @@ internal static class ModFiles
     public static string SaveArtExport(Action<string> log)
     {
         var info = new FileInfo(ArtExport);
-        if (!info.Exists) throw new UserError("There is no card art export yet. In the game: Settings > Mod > Export card art, then come back.");
+        if (!info.Exists) throw new UserError("art.none", "There is no card art export yet. In the game: Settings > Mod > Export card art, then come back.");
         string dir = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDownloads)!.AbsolutePath;
         string target = System.IO.Path.Combine(dir, $"Warpforge card art {info.LastWriteTime:yyyy-MM-dd HHmm}.zip");
         long free = new Android.OS.StatFs(dir).AvailableBytes;
         if (free < info.Length + 20L * 1048576)
-            throw new UserError($"Not enough free space: {info.Length / 1048576} MB needed, {free / 1048576} MB free.");
+            throw new UserError("art.noSpace", "Not enough free space: {needed} MB needed, {free} MB free.", ("needed", info.Length / 1048576), ("free", free / 1048576));
         string temp = target + ".part";
         File.Copy(ArtExport, temp, true);
-        if (new FileInfo(temp).Length != info.Length) { File.Delete(temp); throw new UserError("The copy came out incomplete; try again."); }
+        if (new FileInfo(temp).Length != info.Length) { File.Delete(temp); throw new UserError("art.incomplete", "The copy came out incomplete; try again."); }
         File.Move(temp, target, true);
         log($"Card art export saved to {target} ({info.Length / 1048576} MB)");
         return target;
