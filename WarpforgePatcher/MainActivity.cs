@@ -187,7 +187,7 @@ public class MainActivity : Activity, IPatchLogger
         ShowPage(shownPage == 1 ? toolsPage : patcherPage);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
-        root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 4f));
+        root.AddView(topScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 3.8f));
 
         logView = Text("", 11, "#B8C4B0");
         logView.Typeface = Typeface.Monospace;
@@ -196,7 +196,7 @@ public class MainActivity : Activity, IPatchLogger
         logScroll.AddView(logView);
         logScroll.SetBackgroundColor(Color.ParseColor("#0E0F11"));
         logScroll.SetPadding(Dp(8), Dp(8), Dp(8), Dp(8));
-        var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1f) { TopMargin = Dp(12) };
+        var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1.2f) { TopMargin = Dp(12) };
         root.AddView(logScroll, lp);
         SetContentView(root);
     }
