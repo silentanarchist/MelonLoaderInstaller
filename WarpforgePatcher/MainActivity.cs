@@ -108,7 +108,19 @@ public class MainActivity : Activity, IPatchLogger
         checkUpdates.SetMinimumHeight(0);
         checkUpdates.SetPadding(Dp(10), Dp(6), Dp(10), Dp(6));
         checkUpdates.Click += (_, _) => { if (!busy) _ = CheckForAppUpdate(manual: true); };
-        titleRow.AddView(checkUpdates, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+        // the language, under "Check for updates": the language's own name, so anyone can find theirs
+        language = new Button(this) { Text = "🌐 " + Loc.NameOf(Loc.Language) };
+        language.SetAllCaps(false);
+        language.SetTextSize(Android.Util.ComplexUnitType.Sp, 12);
+        language.SetMinHeight(0);
+        language.SetMinimumHeight(0);
+        language.SetPadding(Dp(10), Dp(6), Dp(10), Dp(6));
+        language.Click += (_, _) => { if (!busy) ChooseLanguage(); };
+        var corner = new LinearLayout(this) { Orientation = Orientation.Vertical };
+        corner.SetGravity(GravityFlags.End);
+        corner.AddView(checkUpdates, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+        corner.AddView(language, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+        titleRow.AddView(corner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
         top.AddView(titleRow);
         top.AddView(Text(Loc.T("ui.intro", "Puts the mod loader and the Warpforge Revival mod into your own copy of the game, on this device. Nothing from the game is downloaded or shared."), 13, "#9AA0A6"));
 
@@ -133,7 +145,6 @@ public class MainActivity : Activity, IPatchLogger
         modOnly = Btn(Loc.T("ui.modOnly", "Update the mod only"), () => _ = UpdateModOnly());
         stillFix = Btn(Loc.T("tools.fixApply", "Apply the black screen fix"), () => _ = ToggleStillFix());
         setServer = Btn(Loc.T("tools.serverChange", "Change the server"), ChangeServer);
-        language = Btn("", ChooseLanguage);
         serverInfo = Text("", 13, "#E6E6E6");
         saveArt = Btn(Loc.T("tools.artSave", "Save card art export to Downloads"), () => _ = SaveArt());
         shareLogs = Btn(Loc.T("ui.shareLogs", "Share logs"), ShareLogs);
@@ -173,9 +184,6 @@ public class MainActivity : Activity, IPatchLogger
         toolsPage.AddView(Text(Loc.T("tools.keyAbout", "The key this app signs the patched game with. Keep a copy: patching again with another key means removing the game first."), 13, "#9AA0A6"));
         toolsPage.AddView(saveKey);
         toolsPage.AddView(loadKey);
-        toolsPage.AddView(Section(Loc.T("tools.langTitle", "Language")));
-        toolsPage.AddView(Text(Loc.T("tools.langAbout", "The language of this app. Translations are first drafts; corrections are welcome on the Warpforge Revival Discord."), 13, "#9AA0A6"));
-        toolsPage.AddView(language);
         ShowPage(shownPage == 1 ? toolsPage : patcherPage);
         var topScroll = new ScrollView(this);
         topScroll.AddView(top);
@@ -338,9 +346,6 @@ public class MainActivity : Activity, IPatchLogger
             appUpdate.Text = updateOffer.Required ? Loc.T("ui.updateAppToRequired", "Update this app to {version} (required)", ("version", updateOffer.Version))
                                                   : Loc.T("ui.updateAppTo", "Update this app to {version}", ("version", updateOffer.Version));
         saveKey.Enabled = File.Exists(KeyFile);
-        string chosen = Loc.Chosen(this);
-        language.Text = chosen.Length > 0 ? Loc.T("tools.langNow", "Language: {name}", ("name", Loc.NameOf(chosen)))
-                                          : Loc.T("tools.langAuto", "Language: {name} (the device's)", ("name", Loc.NameOf(Loc.Language)));
     }
 
     // ---------------------------------------------------------------- language
@@ -355,7 +360,7 @@ public class MainActivity : Activity, IPatchLogger
         var names = new List<string> { Loc.T("lang.auto", "Automatic (the device's language: {name})", ("name", Loc.NameOf(Loc.DeviceLanguage()))) };
         foreach (var (code, name) in Loc.Languages) { codes.Add(code); names.Add(name); }
         new AlertDialog.Builder(this)
-            .SetTitle(Loc.T("tools.langTitle", "Language"))!
+            .SetTitle(Loc.T("lang.title", "Language"))!
             .SetSingleChoiceItems(names.ToArray(), Math.Max(0, codes.IndexOf(chosen)), (sender, e) =>
             {
                 (sender as Dialog)?.Dismiss();
