@@ -103,18 +103,18 @@ public class MainActivity : Activity, IPatchLogger
         titleRow.AddView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
         checkUpdates = new Button(this) { Text = Loc.T("ui.checkUpdates", "Check for updates") };
         checkUpdates.SetAllCaps(false);
-        checkUpdates.SetTextSize(Android.Util.ComplexUnitType.Sp, 12);
+        checkUpdates.SetTextSize(Android.Util.ComplexUnitType.Sp, 15.6f);
         checkUpdates.SetMinHeight(0);
         checkUpdates.SetMinimumHeight(0);
-        checkUpdates.SetPadding(Dp(10), Dp(6), Dp(10), Dp(6));
+        checkUpdates.SetPadding(Dp(14), Dp(9), Dp(14), Dp(9));
         checkUpdates.Click += (_, _) => { if (!busy) _ = CheckForAppUpdate(manual: true); };
         // the language, under "Check for updates": the language's own name, so anyone can find theirs
         language = new Button(this) { Text = "🌐 " + Loc.NameOf(Loc.Language) };
         language.SetAllCaps(false);
-        language.SetTextSize(Android.Util.ComplexUnitType.Sp, 12);
+        language.SetTextSize(Android.Util.ComplexUnitType.Sp, 15.6f);
         language.SetMinHeight(0);
         language.SetMinimumHeight(0);
-        language.SetPadding(Dp(10), Dp(6), Dp(10), Dp(6));
+        language.SetPadding(Dp(14), Dp(9), Dp(14), Dp(9));
         language.Click += (_, _) => { if (!busy) ChooseLanguage(); };
         var corner = new LinearLayout(this) { Orientation = Orientation.Vertical };
         corner.SetGravity(GravityFlags.End);
