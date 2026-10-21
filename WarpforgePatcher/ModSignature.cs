@@ -17,7 +17,13 @@ namespace WarpforgePatcher;
 /// </summary>
 internal static class ModSignature
 {
-    public const string AndroidFileName = "WarpforgeRevival.Android.dll";
+    /// <summary>The Android mod's file name: "WF Revival" builds (mod 0.15.0 on, after the 2026-10-21 rename) are signed
+    /// as WFRevival.Android.dll, older ones as WarpforgeRevival.Android.dll. Both are accepted.</summary>
+    public const string AndroidFileName = "WFRevival.Android.dll";
+    public const string OldAndroidFileName = "WarpforgeRevival.Android.dll";
+    public static readonly string[] AndroidFileNames = { AndroidFileName, OldAndroidFileName };
+    /// <summary>The signed message's first line: kept as "Warpforge Revival mod v1" or moved to a WF Revival label; both accepted.</summary>
+    private static readonly string[] Headers = { "Warpforge Revival mod v1", "WF Revival mod v1", "WF Revival mod v2" };
     private const string Magic = "WFRSIG01";
     private const int Trailer = 64 + 8 + 8;
 
@@ -28,7 +34,7 @@ internal static class ModSignature
         "+STVSQrWCM6CEz1ouUaizh/+HK/PnlAMd4d+3593u6Q=",
     };
 
-    private static readonly Regex VersionInBuild = new(@"Warpforge Revival[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?", RegexOptions.CultureInvariant);
+    private static readonly Regex VersionInBuild = new(@"(?:Warpforge Revival|WF Revival)[\s\S](\d+(?:\.\d+){1,3})(-[a-z][a-z0-9]*)?", RegexOptions.CultureInvariant);
 
     /// <summary>The version a build names for itself ("0.14.0-a"), read the way the server reads it; null if none.</summary>
     public static string? VersionOf(byte[] build, int length)
@@ -50,11 +56,17 @@ internal static class ModSignature
     }
 
     /// <summary>Null when the build is signed by one of the owner's keys (version then says which build it is), else why it was refused.</summary>
-    public static string? Check(byte[] data, string fileName, out string? version) => Check(data, fileName, OwnerKeys, out version);
+    public static string? Check(byte[] data, string fileName, out string? version) => Check(data, new[] { fileName }, OwnerKeys, out version, out _);
 
-    internal static string? Check(byte[] data, string fileName, string[] keys, out string? version)
+    /// <summary>Like Check, for a build signed under any of the given file names; signedAs says which one.</summary>
+    public static string? Check(byte[] data, string[] fileNames, out string? version, out string? signedAs) => Check(data, fileNames, OwnerKeys, out version, out signedAs);
+
+    internal static string? Check(byte[] data, string fileName, string[] keys, out string? version) => Check(data, new[] { fileName }, keys, out version, out _);
+
+    internal static string? Check(byte[] data, string[] fileNames, string[] keys, out string? version, out string? signedAs)
     {
         version = null;
+        signedAs = null;
         if (data == null || data.Length <= Trailer) return "the download is too small";
         int body = data.Length - Trailer;
         if (Encoding.ASCII.GetString(data, data.Length - 8, 8) != Magic) return "the download is not signed";
@@ -64,21 +76,26 @@ internal static class ModSignature
         Array.Copy(data, body + 64, keyId, 0, 8);
         version = VersionOf(data, body);
         if (version == null) return "the download names no version";
-        byte[] message = Message(fileName, version, SHA256.HashData(new ReadOnlySpan<byte>(data, 0, body)));
+        byte[] hash = SHA256.HashData(new ReadOnlySpan<byte>(data, 0, body));
         foreach (var k in keys)
         {
             byte[] key;
             try { key = Convert.FromBase64String(k); } catch { continue; }
             if (key.Length != 32) continue;
             if (!SHA256.HashData(key).AsSpan(0, 8).SequenceEqual(keyId)) continue;
-            return Ed25519.Verify(key, message, sig) ? null : "the signature does not match";
+            foreach (string fileName in fileNames)
+                foreach (string header in Headers)
+                    if (Ed25519.Verify(key, Message(header, fileName, version, hash), sig)) { signedAs = fileName; return null; }
+            return "the signature does not match";
         }
         return "the download is signed with a key this app does not know";
     }
 
-    internal static byte[] Message(string fileName, string version, byte[] sha256)
+    internal static byte[] Message(string fileName, string version, byte[] sha256) => Message(Headers[0], fileName, version, sha256);
+
+    internal static byte[] Message(string header, string fileName, string version, byte[] sha256)
     {
-        var head = Encoding.UTF8.GetBytes("Warpforge Revival mod v1\n" + fileName + "\n" + version + "\n");
+        var head = Encoding.UTF8.GetBytes(header + "\n" + fileName + "\n" + version + "\n");
         var all = new byte[head.Length + sha256.Length];
         head.CopyTo(all, 0);
         sha256.CopyTo(all, head.Length);

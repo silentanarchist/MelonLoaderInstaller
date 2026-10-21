@@ -26,7 +26,12 @@ internal static class ModFiles
     public const int Port = 8780;
 
     public static string ModsDir => System.IO.Path.Combine(GameFiles.LoaderDir, "Mods");
-    public static string ModFile => System.IO.Path.Combine(ModsDir, "WarpforgeRevival.Android.dll");
+    /// <summary>The mod as "WF Revival" builds name it (mod 0.15.0 on), and as older builds did. The mod renames itself
+    /// when it starts from the old name; this app puts each build in place under the name it was signed as.</summary>
+    public static string NewModFile => System.IO.Path.Combine(ModsDir, ModSignature.AndroidFileName);
+    public static string OldModFile => System.IO.Path.Combine(ModsDir, ModSignature.OldAndroidFileName);
+    /// <summary>The mod file on the device (new name first), or the new name when there is none.</summary>
+    public static string ModFile => File.Exists(NewModFile) || !File.Exists(OldModFile) ? NewModFile : OldModFile;
     public static string ConfigFile => System.IO.Path.Combine(GameFiles.LoaderDir, "UserData", "WarpforgeRevival.cfg");
     public static string StillFile => System.IO.Path.Combine(GameFiles.LoaderDir, "UserData", "WarpforgeRevival", "content", "intro-last.rgba");
     public static string LatestLog => System.IO.Path.Combine(GameFiles.LoaderDir, "Latest.log");
@@ -67,7 +72,7 @@ internal static class ModFiles
     public static async Task<(string path, string version)> DownloadMod(string workDir, Action<string> log)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("WarpforgePatcher/1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("WFRevivalPatcher/1");
         string server = "", manifestText = "";
         var servers = ServerBases();
         for (int i = 0; i < servers.Length; i++)
@@ -95,13 +100,13 @@ internal static class ModFiles
             throw new UserError("mod.badChecksum", "The downloaded mod does not match the server's checksum; nothing was changed.");
         // the owner's signature (mod 0.14.0 on): the server's checksum cannot vouch for a build if the server itself
         // was broken into, the signature can. The file is kept exactly as downloaded, signature included.
-        string? refused = ModSignature.Check(data, ModSignature.AndroidFileName, out string? signedVersion);
+        string? refused = ModSignature.Check(data, ModSignature.AndroidFileNames, out string? signedVersion, out string? signedAs);
         if (refused != null)
         {
             log("Mod refused: " + refused);
-            throw new UserError("mod.refused", "The mod from the server was refused: {reason}. Only mod builds signed by the Warpforge Revival project are installed; nothing was changed.", ("reason", RefusedReason(refused)));
+            throw new UserError("mod.refused", "The mod from the server was refused: {reason}. Only mod builds signed by the WF Revival project are installed; nothing was changed.", ("reason", RefusedReason(refused)));
         }
-        log($"Mod signature OK ({signedVersion})");
+        log($"Mod signature OK ({signedVersion}, signed as {signedAs})");
         if (signedVersion != null && File.Exists(ModFile))
         {
             string? onDevice = ModSignature.VersionOfFile(ModFile);
@@ -112,7 +117,7 @@ internal static class ModFiles
             }
         }
         if (signedVersion != null) version = signedVersion;
-        string path = System.IO.Path.Combine(workDir, "WarpforgeRevival.Android.dll");
+        string path = System.IO.Path.Combine(workDir, signedAs ?? ModSignature.AndroidFileName);
         await File.WriteAllBytesAsync(path, data);
         log($"Mod {version} downloaded ({data.Length / 1024} KB, checksum OK)");
         return (path, version);
@@ -136,10 +141,14 @@ internal static class ModFiles
         Directory.CreateDirectory(ModsDir);
         MoveAside(System.IO.Path.Combine(loader, "Mods", "WarpforgeRevival.AndroidTest.dll"), System.IO.Path.Combine(loader, "Mods-disabled"), log);
         MoveAside(System.IO.Path.Combine(loader, "Plugins", "WarpforgeRevival.AndroidGraphics.dll"), System.IO.Path.Combine(loader, "Plugins-disabled"), log);
-        string temp = ModFile + ".new";
+        // the build goes in under the name it was signed as; the other name is removed so the game never loads two copies
+        string target = System.IO.Path.Combine(ModsDir, System.IO.Path.GetFileName(downloaded));
+        string other = target == NewModFile ? OldModFile : NewModFile;
+        string temp = target + ".new";
         File.Copy(downloaded, temp, true);
-        File.Move(temp, ModFile, true);
-        log("Mod put in " + ModsDir);
+        File.Move(temp, target, true);
+        if (File.Exists(other)) { File.Delete(other); log("Removed " + other); }
+        log("Mod put in place: " + target);
     }
 
     private static void MoveAside(string file, string dir, Action<string> log)
@@ -282,7 +291,7 @@ internal static class ModFiles
         var info = new FileInfo(ArtExport);
         if (!info.Exists) throw new UserError("art.none", "There is no card art export yet. In the game: Settings > Mod > Export card art, then come back.");
         string dir = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDownloads)!.AbsolutePath;
-        string target = System.IO.Path.Combine(dir, $"Warpforge card art {info.LastWriteTime:yyyy-MM-dd HHmm}.zip");
+        string target = System.IO.Path.Combine(dir, $"WF Revival card art {info.LastWriteTime:yyyy-MM-dd HHmm}.zip");
         long free = new Android.OS.StatFs(dir).AvailableBytes;
         if (free < info.Length + 20L * 1048576)
             throw new UserError("art.noSpace", "Not enough free space: {needed} MB needed, {free} MB free.", ("needed", info.Length / 1048576), ("free", free / 1048576));

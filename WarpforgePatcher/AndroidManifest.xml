@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application android:label="Warpforge Patcher" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher"
+  <application android:label="WF Revival Patcher" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher"
                android:allowBackup="false" android:theme="@android:style/Theme.Material.NoActionBar">
     <!-- shares the log bundle with other apps (Discord, mail) without making any file public -->
     <provider android:name="androidx.core.content.FileProvider" android:authorities="com.silentanarchist.warpforgepatcher.files"

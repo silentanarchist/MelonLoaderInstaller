@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- Warpforge Revival Patcher: patches the player's own copy of Warhammer 40,000: Warpforge on the phone
+  <!-- WF Revival Patcher (formerly Warpforge Patcher; package id unchanged so installed copies update): patches the player's own copy of Warhammer 40,000: Warpforge on the phone
        itself, with the same patching code as LemonPatch.exe (../Core). See README-WarpforgePatcher.md. -->
   <PropertyGroup>
     <TargetFramework>net8.0-android</TargetFramework>
@@ -9,9 +9,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>WarpforgePatcher</RootNamespace>
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
-    <ApplicationTitle>Warpforge Patcher</ApplicationTitle>
-    <ApplicationVersion>17</ApplicationVersion>
-    <ApplicationDisplayVersion>0.4.0</ApplicationDisplayVersion>
+    <ApplicationTitle>WF Revival Patcher</ApplicationTitle>
+    <ApplicationVersion>18</ApplicationVersion>
+    <ApplicationDisplayVersion>0.4.1</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- the loader package is already a zip; storing it as-is keeps the build quick -->

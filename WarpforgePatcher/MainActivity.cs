@@ -11,7 +11,7 @@ using Org.BouncyCastle.OpenSsl;
 
 namespace WarpforgePatcher;
 
-[Activity(Label = "Warpforge Patcher", MainLauncher = true, Exported = true,
+[Activity(Label = "WF Revival Patcher", MainLauncher = true, Exported = true,
           ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.KeyboardHidden,
           ScreenOrientation = ScreenOrientation.Portrait)]
 public class MainActivity : Activity, IPatchLogger
@@ -45,7 +45,7 @@ public class MainActivity : Activity, IPatchLogger
         PackageOps.ConfirmationState = ShowContinue;
         _ = CheckForAppUpdate(manual: false);
         _ = RefreshTranslations();
-        Log($"Warpforge Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default; language {Loc.Language}{(Loc.Chosen(this).Length > 0 ? " (picked)" : " (device)")}");
+        Log($"WF Revival Patcher {PackageManager!.GetPackageInfo(PackageName!, 0)!.VersionName} on {Build.Manufacturer} {Build.Model}, Android {Build.VERSION.Release}, chip {(OperatingSystem.IsAndroidVersionAtLeast(31) ? Build.SocManufacturer + " " + Build.SocModel : Build.Hardware)}, GPU {GpuName()}; still picture {(still.Checked ? "on" : "off")} by default; language {Loc.Language}{(Loc.Chosen(this).Length > 0 ? " (picked)" : " (device)")}");
     }
 
     protected override void OnDestroy()
@@ -98,7 +98,7 @@ public class MainActivity : Activity, IPatchLogger
         // title on the left, "Check for updates" in the top right corner
         var titleRow = new LinearLayout(this) { Orientation = Orientation.Horizontal };
         titleRow.SetGravity(GravityFlags.CenterVertical);
-        var title = Text("Warpforge Revival Patcher", 22, "#E8D9A8");
+        var title = Text("WF Revival Patcher", 22, "#E8D9A8");
         title.SetTypeface(null, TypefaceStyle.Bold);
         titleRow.AddView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
         checkUpdates = new Button(this) { Text = Loc.T("ui.checkUpdates", "Check for updates") };
@@ -122,7 +122,7 @@ public class MainActivity : Activity, IPatchLogger
         corner.AddView(language, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
         titleRow.AddView(corner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
         top.AddView(titleRow);
-        top.AddView(Text(Loc.T("ui.intro", "Puts the mod loader and the Warpforge Revival mod into your own copy of the game, on this device. Nothing from the game is downloaded or shared."), 13, "#9AA0A6"));
+        top.AddView(Text(Loc.T("ui.intro", "Puts the mod loader and the WF Revival mod into your own copy of the game, on this device. Nothing from the game is downloaded or shared."), 13, "#9AA0A6"));
 
         status = Text("", 14, "#E6E6E6");
         status.SetPadding(0, Dp(12), 0, Dp(8));
@@ -174,7 +174,7 @@ public class MainActivity : Activity, IPatchLogger
         toolsPage.AddView(Text(Loc.T("tools.fixAbout", "Shows a still picture instead of the loading video, for devices that end up on a black menu after loading. Works on the already patched game; nothing is patched again."), 13, "#9AA0A6"));
         toolsPage.AddView(stillFix);
         toolsPage.AddView(Section(Loc.T("tools.serverTitle", "Server")));
-        toolsPage.AddView(Text(Loc.T("tools.serverAbout", "The Warpforge Revival server the mod connects to (ServerUrl in the mod's settings). Close the game fully before changing it."), 13, "#9AA0A6"));
+        toolsPage.AddView(Text(Loc.T("tools.serverAbout", "The WF Revival server the mod connects to (ServerUrl in the mod's settings). Close the game fully before changing it."), 13, "#9AA0A6"));
         toolsPage.AddView(serverInfo);
         toolsPage.AddView(setServer);
         toolsPage.AddView(Section(Loc.T("tools.artTitle", "Card art")));
@@ -538,8 +538,8 @@ public class MainActivity : Activity, IPatchLogger
                 var v = ("version", (object?)offer.Version);
                 bool now = await Ask(offer.Required ? Loc.T("upd.requiredTitle", "Required update") : Loc.T("upd.title", "Update available"),
                     offer.Required
-                        ? Loc.T("upd.requiredText", "Warpforge Patcher {version} is available (you have {have}).\n\nThis update is required: patching is paused until the app is updated.\n\nUpdating keeps your saved signing key. Android asks you to confirm, then the app restarts as the new version.", v, have)
-                        : Loc.T("upd.text", "Warpforge Patcher {version} is available (you have {have}).\n\nUpdating keeps your saved signing key. Android asks you to confirm, then the app restarts as the new version.", v, have),
+                        ? Loc.T("upd.requiredText", "WF Revival Patcher {version} is available (you have {have}).\n\nThis update is required: patching is paused until the app is updated.\n\nUpdating keeps your saved signing key. Android asks you to confirm, then the app restarts as the new version.", v, have)
+                        : Loc.T("upd.text", "WF Revival Patcher {version} is available (you have {have}).\n\nUpdating keeps your saved signing key. Android asks you to confirm, then the app restarts as the new version.", v, have),
                     Loc.T("upd.now", "Update now"), offer.Required ? Loc.T("upd.notNow", "Not now") : Loc.T("upd.later", "Later"));
                 if (now && !busy) await UpdateApp();
             }
@@ -851,7 +851,7 @@ public class MainActivity : Activity, IPatchLogger
             send.SetType("application/zip");
             send.PutExtra(Intent.ExtraStream, uri);
             send.AddFlags(ActivityFlags.GrantReadUriPermission);
-            StartActivity(Intent.CreateChooser(send, Loc.T("logs.share", "Share Warpforge logs")));
+            StartActivity(Intent.CreateChooser(send, Loc.T("logs.share", "Share WF Revival logs")));
         }
         catch (Exception e) { Log("Could not share the logs: " + e.Message); Say(Loc.T("logs.failed", "Could not share the logs: {error}", ("error", e.Message))); }
     }

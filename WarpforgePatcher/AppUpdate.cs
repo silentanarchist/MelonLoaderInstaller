@@ -7,7 +7,7 @@ using Android.Content.PM;
 namespace WarpforgePatcher;
 
 /// <summary>
-/// Updates this app from its own GitHub releases (silentanarchist/warpforge-revival-mod, tags patcher-v&lt;version&gt;;
+/// Updates this app from its own GitHub releases (silentanarchist/wf-revival-mod, formerly warpforge-revival-mod, tags patcher-v&lt;version&gt;;
 /// up to 0.2.8 they were also published in silentanarchist/warpforge-revival-mod-android, which 0.2.7 and older read),
 /// so a new build reaches players without them downloading and reinstalling the APK by hand.
 ///
@@ -24,10 +24,16 @@ namespace WarpforgePatcher;
 /// </summary>
 internal static class AppUpdate
 {
-    private const string Repo = "silentanarchist/warpforge-revival-mod";
+    // Renamed on 2026-10-21 (was silentanarchist/warpforge-revival-mod; GitHub redirects the old name). Downloads are
+    // accepted under either name, so a release can never be refused for the repository's spelling.
+    private const string Repo = "silentanarchist/wf-revival-mod";
+    private static readonly string[] DownloadPrefixes =
+    {
+        "https://github.com/silentanarchist/wf-revival-mod/releases/download/",
+        "https://github.com/silentanarchist/warpforge-revival-mod/releases/download/",
+    };
     private const string Tags = "https://api.github.com/repos/" + Repo + "/git/matching-refs/tags/patcher-v";
     private const string ReleaseByTag = "https://api.github.com/repos/" + Repo + "/releases/tags/";
-    private const string Downloads = "https://github.com/" + Repo + "/releases/download/";
 
     public sealed class Offer
     {
@@ -87,7 +93,7 @@ internal static class AppUpdate
                 if (best != null) break;
             }
             if (best == null || best.Version <= current) { log($"App is up to date ({current})"); return (null, null); }
-            if (!best.ApkUrl.StartsWith(Downloads, StringComparison.Ordinal))
+            if (!DownloadPrefixes.Any(p => best.ApkUrl.StartsWith(p, StringComparison.Ordinal)))
             {
                 log("Update check: the release's APK is not on this project's GitHub page; ignored");
                 return (null, null);
@@ -147,7 +153,7 @@ internal static class AppUpdate
     private static HttpClient Client(TimeSpan timeout)
     {
         var http = new HttpClient { Timeout = timeout };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("WarpforgePatcher/1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("WFRevivalPatcher/1");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return http;
     }

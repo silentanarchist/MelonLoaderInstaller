@@ -113,7 +113,7 @@ internal static class Loc
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("WarpforgePatcher/1");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("WFRevivalPatcher/1");
             string server = ModFiles.ServerBase();
             string want;
             using (var index = JsonDocument.Parse(await http.GetStringAsync(server + "/api/v1/content/files/localization/index.json")))

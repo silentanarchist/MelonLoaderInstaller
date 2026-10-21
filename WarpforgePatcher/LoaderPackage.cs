@@ -11,10 +11,10 @@ namespace WarpforgePatcher;
 /// </summary>
 internal static class LoaderPackage
 {
-    public const string Commit = "67662ccd45cef784c73f01f00375a1ead13e5b05";   // silentanarchist/warpforge-revival-mod-android
+    public const string Commit = "67662ccd45cef784c73f01f00375a1ead13e5b05";   // silentanarchist/wf-revival-mod-android (warpforge-revival-mod-android before the 2026-10-21 rename)
     public const string Sha256 = "05274366462a3364be30c1f5a7adcb4368fdad254102229989ceaba4fdfcda3b";   // the three parts joined (loader59)
     public const int Parts = 3;
-    private const string Url = "https://raw.githubusercontent.com/silentanarchist/warpforge-revival-mod-android/" + Commit + "/patcher/tool/melon_data.zip.part";
+    private const string Url = "https://raw.githubusercontent.com/silentanarchist/wf-revival-mod-android/" + Commit + "/patcher/tool/melon_data.zip.part";
 
     /// <summary>Puts a checked copy of the loader package at <paramref name="dest"/>.</summary>
     public static async Task Get(Android.Content.Context context, string dest, Action<string> log)
@@ -41,7 +41,7 @@ internal static class LoaderPackage
         Directory.CreateDirectory(Path.GetDirectoryName(cached)!);
         foreach (var old in Directory.GetFiles(Path.GetDirectoryName(cached)!)) try { File.Delete(old); } catch { }
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("WarpforgePatcher/1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("WFRevivalPatcher/1");
         string temp = cached + ".part";
         using (var output = File.Create(temp))
         {
