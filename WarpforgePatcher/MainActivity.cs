@@ -480,7 +480,11 @@ public class MainActivity : Activity, IPatchLogger
             try { stillPicture = await Task.Run(() => ModFiles.MakeStill(parts.Base, WorkDir, Log)); }
             catch (Exception e) { Log("Could not make the still picture: " + e.Message + " (the game is patched anyway)"); }
         }
-        var (modPath, modVersion) = await ModFiles.DownloadMod(WorkDir, Log);
+        // a newer mod already on the device (a test build) is kept; patching goes on without replacing it
+        string? modPath;
+        string modVersion;
+        try { (modPath, modVersion) = await ModFiles.DownloadMod(WorkDir, Log); }
+        catch (ModFiles.NewerModOnDevice newer) { modPath = null; modVersion = newer.Device; }
 
         string loaderZip = System.IO.Path.Combine(WorkDir, "melon_data.zip");
         await LoaderPackage.Get(this, loaderZip, Log);
@@ -504,7 +508,8 @@ public class MainActivity : Activity, IPatchLogger
         if (!ok) throw new UserError("err.notInstalled", "The patched game was not installed. {why} The patched files are kept; press the button again to retry.", ("why", message));
         Log("Patched game installed");
 
-        ModFiles.PutMod(modPath, Log);
+        if (modPath != null) ModFiles.PutMod(modPath, Log);
+        else Log($"Mod {modVersion} on the device kept (newer than the server's)");
         if (stillPicture != null)
         {
             ModFiles.PutStill(stillPicture, Log);
@@ -581,7 +586,12 @@ public class MainActivity : Activity, IPatchLogger
     private Task UpdateModOnly() => RunJob("Updating the mod", async () =>
     {
         Directory.CreateDirectory(WorkDir);
-        var (path, version) = await ModFiles.DownloadMod(WorkDir, Log);
+        string path, version;
+        try { (path, version) = await ModFiles.DownloadMod(WorkDir, Log); }
+        catch (ModFiles.NewerModOnDevice newer)
+        {
+            throw new UserError("mod.newerOnDevice", "This device already has a newer mod ({device}) than the server's ({server}); it was kept.", ("device", newer.Device), ("server", newer.Server));
+        }
         ModFiles.PutMod(path, Log);
         if (still.Checked && !File.Exists(ModFiles.StillFile))
         {

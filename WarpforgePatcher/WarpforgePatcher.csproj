@@ -10,7 +10,7 @@
     <RootNamespace>WarpforgePatcher</RootNamespace>
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
     <ApplicationTitle>WF Revival Patcher</ApplicationTitle>
-    <ApplicationVersion>19</ApplicationVersion>
+    <ApplicationVersion>20</ApplicationVersion>
     <ApplicationDisplayVersion>0.4.2</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>

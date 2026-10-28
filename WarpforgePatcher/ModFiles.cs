@@ -112,8 +112,8 @@ internal static class ModFiles
             string? onDevice = ModSignature.VersionOfFile(ModFile);
             if (onDevice != null && ModSignature.CompareVersions(signedVersion, onDevice) < 0)
             {
-                log($"Mod refused: {signedVersion} is older than {onDevice} on the device");
-                throw new UserError("mod.older", "The server's mod ({server}) is older than the one on this device ({device}); nothing was changed.", ("server", signedVersion), ("device", onDevice));
+                log($"The server's mod {signedVersion} is older than {onDevice} on the device; the device's is kept");
+                throw new NewerModOnDevice(signedVersion, onDevice);
             }
         }
         if (signedVersion != null) version = signedVersion;
@@ -121,6 +121,13 @@ internal static class ModFiles
         await File.WriteAllBytesAsync(path, data);
         log($"Mod {version} downloaded ({data.Length / 1024} KB, checksum OK)");
         return (path, version);
+    }
+
+    /// <summary>The device already has a newer mod than the server's (a test build, say): it is kept as it is.</summary>
+    public sealed class NewerModOnDevice(string server, string device) : Exception($"server {server}, device {device}")
+    {
+        public string Server { get; } = server;
+        public string Device { get; } = device;
     }
 
     /// <summary>ModSignature's reason (English, as the mod's own check words it) as a text for the player.</summary>
