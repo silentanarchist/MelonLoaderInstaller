@@ -10,8 +10,8 @@
     <RootNamespace>WarpforgePatcher</RootNamespace>
     <ApplicationId>com.silentanarchist.warpforgepatcher</ApplicationId>
     <ApplicationTitle>WF Revival Patcher</ApplicationTitle>
-    <ApplicationVersion>18</ApplicationVersion>
-    <ApplicationDisplayVersion>0.4.1</ApplicationDisplayVersion>
+    <ApplicationVersion>19</ApplicationVersion>
+    <ApplicationDisplayVersion>0.4.2</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- the loader package is already a zip; storing it as-is keeps the build quick -->
@@ -24,6 +24,10 @@
     <AndroidAsset Include="$(MelonDataZip)" Link="Assets/melon_data.zip" />
   </ItemGroup>
   <!-- the app's translations: copies of the mod repo's localization/patcher/<code>.json (build.sh refreshes them) -->
+  <!-- the start-up picture put into the patched game (PatchJob, LEMON_LAUNCH_SPLASH); our own art, made from the title text -->
+  <ItemGroup>
+    <AndroidAsset Include="Splash/launch-splash.png" Link="Assets/launch-splash.png" />
+  </ItemGroup>
   <ItemGroup>
     <AndroidAsset Include="Localization/*.json" Exclude="Localization/en.json" Link="Assets/localization/%(Filename)%(Extension)" />
   </ItemGroup>

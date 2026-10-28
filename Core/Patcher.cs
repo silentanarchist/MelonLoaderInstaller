@@ -55,6 +55,7 @@ public class Patcher(PatchArguments arguments, IPatchLogger logger)
                 new ExtractDependencies(),
                 new ExtractUnityLibs(),
                 new PatchManifest(),
+                new AddLaunchSplash(),          // WF Revival: start-up picture, only when LEMON_LAUNCH_SPLASH is set
                 new InstallPlugins(),
                 new RepackAPK(),
                 new GenerateCertificate(),

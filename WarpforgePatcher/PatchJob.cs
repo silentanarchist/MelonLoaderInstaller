@@ -35,6 +35,13 @@ internal static class PatchJob
         }
         log.Log("Keeping the game's own engine library (libunity.so)");
 
+        // the start-up picture: shown by the game's engine from launch until its first frame, instead of the black
+        // screen while the loader starts (Core AddLaunchSplash; skipped by itself if the game's resources look unexpected)
+        string splash = Path.Combine(temp, "launch-splash.png");
+        using (var a = context.Assets!.Open("launch-splash.png")) using (var f = File.Create(splash)) a.CopyTo(f);
+        Environment.SetEnvironmentVariable("LEMON_LAUNCH_SPLASH", splash);
+        Environment.SetEnvironmentVariable("LEMON_LAUNCH_SPLASH_COLOR", "16181B");
+
         // one signing key for every run (generated on the first, kept in this app's private storage)
         Environment.SetEnvironmentVariable("LEMON_SIGNING_KEY", keyFile);
 
