@@ -18,6 +18,9 @@ internal static class PackageOps
     private static Intent? lastConfirm;
     private static int pendingSession = -1;
     private static LocText pendingWhat = new("", "");
+    // what the waiting install puts on the device, and when it was handed over (for the "already installing" fallback)
+    private static string pendingPackage = "";
+    private static long committedAt;
 
     /// <summary>True while an install or uninstall waits for Android and its confirmation has been shown at least once.</summary>
     public static bool WaitingForConfirmation => pending != null && !pending.Task.IsCompleted && lastConfirm != null;
@@ -86,6 +89,8 @@ internal static class PackageOps
             finally { Progress.Hide(); }
             var wait = Listen(activity, log, package == null ? new LocText("confirm.installGame", "install the patched game") : new LocText("confirm.installUpdate", "install the app update"));
             pendingSession = id;
+            pendingPackage = package ?? GameFiles.Package;
+            committedAt = Java.Lang.JavaSystem.CurrentTimeMillis();
             session.Commit(StatusSender(activity, id));
             return await wait;
         }
@@ -154,8 +159,55 @@ internal static class PackageOps
                 return;
             }
             bool ok = status == PackageInstallStatus.Success;
+            if (!ok && pendingSession >= 0 && message.Contains("Session files in use", StringComparison.OrdinalIgnoreCase))
+            {
+                // 0.4.5: the player pressed Install, Android started installing (it says nothing until it is done, so the
+                // Continue button was still up), the player pressed Continue and Install again, and Android refused the
+                // second one: the first install goes on. Wait for its own answer, with a check of the device as a fallback.
+                log($"Android answered: {status} {message}; it is already installing the {(pendingPackage == GameFiles.Package ? "game" : "update")} from the first confirmation, waiting for that");
+                lastConfirm = null;
+                ConfirmationState?.Invoke(false);
+                _ = WatchInstall(activity, done, log, pendingSession, pendingPackage, committedAt);
+                return;
+            }
             if (!ok) log($"Android answered: {status} {message}");
             done.TrySetResult((ok, ok ? new LocText("", "") : Explain(status, message)));
+        }
+    }
+
+    /// <summary>
+    /// After "Session files in use": checks every 3 s whether Android is still busy with the install session and, once it
+    /// is gone, whether the package was installed after the hand-over. Android's own answer (to the same receiver) usually
+    /// comes first; this only matters if it never does. Gives up after 10 minutes.
+    /// </summary>
+    private static async Task WatchInstall(Activity activity, TaskCompletionSource<(bool, LocText)> done, Action<string> log, int session, string package, long since)
+    {
+        var installer = activity.PackageManager!.PackageInstaller;
+        var deadline = DateTime.UtcNow.AddMinutes(10);
+        while (!done.Task.IsCompleted && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(3000);
+            if (done.Task.IsCompleted) return;
+            bool sessionGone;
+            try { sessionGone = installer.GetSessionInfo(session) == null; } catch { sessionGone = true; }
+            if (!sessionGone) continue;
+            await Task.Delay(3000); // give Android's answer a moment to arrive
+            if (done.Task.IsCompleted) return;
+            bool installed = false;
+            try
+            {
+                var info = activity.PackageManager!.GetPackageInfo(package, 0)!;
+                installed = info.LastUpdateTime >= since - 5000;
+            }
+            catch { }
+            log(installed ? "The install finished (checked on the device)" : "The install session ended without installing it (checked on the device)");
+            done.TrySetResult(installed ? (true, new LocText("", "")) : (false, new LocText("install.notFinished", "Android did not finish installing it. Press the button again to retry.")));
+            return;
+        }
+        if (!done.Task.IsCompleted)
+        {
+            log("No answer from Android after 10 minutes");
+            done.TrySetResult((false, new LocText("install.noAnswer", "Android did not say whether the install worked. Check whether the game is in your app list; if it is not, press the button again.")));
         }
     }
 

@@ -752,7 +752,9 @@ public class MainActivity : Activity, IPatchLogger
         if (waiting && !continueShown)
         {
             jobButtonLabel = jobButton.Text ?? "";
-            jobButton.Text = Loc.T("ui.continue", "Continue: {step}", ("step", PackageOps.WaitingFor));
+            // 0.4.5: worded so it does not look like the next step: after "Install" Android keeps installing for a while
+            // without a word, and a second "Install" from here made Android refuse it ("Session files in use")
+            jobButton.Text = Loc.T("ui.continueWaiting", "Waiting for Android: {step}.\nTap only if Android's prompt was closed.", ("step", PackageOps.WaitingFor));
             jobButton.Enabled = true;
             continueShown = true;
         }
