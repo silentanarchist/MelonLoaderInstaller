@@ -49,7 +49,7 @@ internal static class PackageOps
     }
 
     /// <summary>Installs all patched APKs together as one app (they are splits of one package).</summary>
-    public static Task<(bool ok, LocText message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
+    public static async Task<(bool ok, LocText message)> Install(Activity activity, IEnumerable<string> apks, Action<string> log, string? package = null)
     {
         var installer = activity.PackageManager!.PackageInstaller;
         var p = new PackageInstaller.SessionParams(PackageInstallMode.FullInstall);
@@ -58,22 +58,36 @@ internal static class PackageOps
         int id = installer.CreateSession(p);
         using (var session = installer.OpenSession(id))
         {
-            int i = 0;
-            byte[] buffer = new byte[1 << 20];
-            foreach (string apk in apks)
+            // off the screen's thread (0.4.3): the game is about 750 MB, and the progress bar has to be drawn meanwhile
+            string[] files = apks.ToArray();
+            long total = files.Sum(f => new FileInfo(f).Length);
+            string label = package == null ? Loc.T("prog.installGame", "Handing the patched game to Android") : Loc.T("prog.installUpdate", "Handing the update to Android");
+            try
             {
-                log($"Handing {Path.GetFileName(apk)} to Android's installer");
-                using var input = File.OpenRead(apk);
-                using var output = session.OpenWrite($"{i++}-{Path.GetFileName(apk)}", 0, input.Length)!;
-                int n;
-                while ((n = input.Read(buffer, 0, buffer.Length)) > 0) output.Write(buffer, 0, n);
-                output.Flush();
-                session.Fsync(output);
+                await Task.Run(() =>
+                {
+                    long done = 0;
+                    for (int i = 0; i < files.Length; i++)
+                    {
+                        log($"Handing {Path.GetFileName(files[i])} to Android's installer");
+                        using var input = File.OpenRead(files[i]);
+                        using var output = session.OpenWrite($"{i}-{Path.GetFileName(files[i])}", 0, input.Length)!;
+                        done = Progress.Copy(input, output, done, total, label);
+                        output.Flush();
+                        session.Fsync(output);
+                    }
+                });
             }
+            catch
+            {
+                try { session.Abandon(); } catch { }
+                throw;
+            }
+            finally { Progress.Hide(); }
             var wait = Listen(activity, log, package == null ? new LocText("confirm.installGame", "install the patched game") : new LocText("confirm.installUpdate", "install the app update"));
             pendingSession = id;
             session.Commit(StatusSender(activity, id));
-            return wait;
+            return await wait;
         }
     }
 

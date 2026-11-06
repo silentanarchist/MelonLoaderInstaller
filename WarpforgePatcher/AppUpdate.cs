@@ -125,7 +125,15 @@ internal static class AppUpdate
             reply.EnsureSuccessStatusCode();
             await using var s = await reply.Content.ReadAsStreamAsync();
             await using var f = File.Create(path);
-            await s.CopyToAsync(f);
+            try
+            {
+                await Progress.Download(s, f, reply.Content.Headers.ContentLength ?? offer.Size,
+                    Loc.T("prog.appUpdate", "Downloading the app update"), "App update download", log);
+            }
+            catch (Progress.Stalled)
+            {
+                throw new UserError("update.stalled", "The download of the update stopped: nothing arrived for 30 seconds. Check the connection and try again, or download the APK from the releases page:\n{url}", ("url", offer.PageUrl));
+            }
         }
         string got;
         using (var f = File.OpenRead(path)) got = Convert.ToHexString(SHA256.HashData(f)).ToLowerInvariant();

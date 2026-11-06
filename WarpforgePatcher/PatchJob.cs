@@ -47,7 +47,14 @@ internal static class PatchJob
 
         var args = new PatchArguments(parts.Base, parts.Arm64, parts.Extra.ToArray(), outDir, temp, melon, unityZip,
             AssetRipper.Primitives.UnityVersion.Parse(GameFiles.UnityVersion), GameFiles.Package, true);
-        bool ok = new Patcher(args, log).Run();
+        Progress.Show(Loc.T("prog.patchPrepare", "Patching the game: copying its files"), -1);
+        var patcher = new Patcher(args, log)
+        {
+            StepStarted = (step, steps) => Progress.Show(Loc.T("prog.patchStep", "Patching the game: step {step} of {steps}", ("step", step), ("steps", steps)), (step - 1) / (double)steps),
+        };
+        bool ok;
+        try { ok = patcher.Run(); }
+        finally { Progress.Hide(); }
         try { Directory.Delete(temp, true); } catch { }
         if (!ok) throw new UserError("err.patchFailed", "Patching did not finish. The log below says where it stopped.");
 

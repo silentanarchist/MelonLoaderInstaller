@@ -111,17 +111,21 @@ internal static class GameFiles
         if (main == null || arm64 == null)
             throw new UserError("err.backupIncomplete", "The backup is missing the game's main file or its arm64 code file. Found: {files}", ("files", string.Join(", ", apks.Select(e => e.Name))));
 
+        long total = apks.Sum(e => e.Length), done = 0;
         foreach (var e in apks)
         {
             // names inside the output folder: base.apk for the main one, the others with a leading "split_" removed
             string target = e == main ? "base.apk" : (e.Name.StartsWith("split_", StringComparison.OrdinalIgnoreCase) ? e.Name.Substring(6) : e.Name);
             string path = Path.Combine(outDir, target);
             log($"Unpacking {e.Name} ({e.Length / 1048576} MB)");
-            e.ExtractToFile(path, true);
+            using (var input = e.Open())
+            using (var output = File.Create(path))
+                done = Progress.Copy(input, output, done, total, Loc.T("prog.unpack", "Unpacking the backup"));
             if (e == main) parts.Base = path;
             else if (e == arm64) parts.Arm64 = path;
             else parts.Extra.Add(path);
         }
+        Progress.Hide();
         return parts;
     }
 

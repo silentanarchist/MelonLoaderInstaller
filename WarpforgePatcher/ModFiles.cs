@@ -94,7 +94,16 @@ internal static class ModFiles
         string url = root.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "";
         if (url.Length == 0) url = "/api/v1/mod/download?platform=android";
         if (!url.StartsWith("/", StringComparison.Ordinal)) throw new UserError("mod.foreignUrl", "The server's mod address is not on the server itself; refused.");
-        byte[] data = await http.GetByteArrayAsync(server + url);
+        byte[] data;
+        using (var reply = await http.GetAsync(server + url, HttpCompletionOption.ResponseHeadersRead))
+        {
+            reply.EnsureSuccessStatusCode();
+            await using var s = await reply.Content.ReadAsStreamAsync();
+            using var memory = new MemoryStream();
+            try { await Progress.Download(s, memory, reply.Content.Headers.ContentLength ?? -1, Loc.T("prog.mod", "Downloading the mod"), "Mod download", log); }
+            catch (Progress.Stalled) { throw new UserError("mod.stalled", "The download of the mod stopped: nothing arrived for 30 seconds. Check the connection and try again."); }
+            data = memory.ToArray();
+        }
         string got = Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
         if (sha.Length != 64 || got != sha)
             throw new UserError("mod.badChecksum", "The downloaded mod does not match the server's checksum; nothing was changed.");

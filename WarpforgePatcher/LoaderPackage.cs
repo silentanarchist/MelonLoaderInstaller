@@ -60,7 +60,15 @@ internal static class LoaderPackage
                 if (!reply.IsSuccessStatusCode)
                     throw new UserError("err.loaderDownload", "Could not download the loader package from GitHub ({code}). Check the connection and try again.", ("code", (int)reply.StatusCode));
                 await using var s = await reply.Content.ReadAsStreamAsync();
-                await s.CopyToAsync(output);
+                try
+                {
+                    await Progress.Download(s, output, reply.Content.Headers.ContentLength ?? -1,
+                        Loc.T("prog.loader", "Downloading the loader package (part {part} of {parts})", ("part", i + 1), ("parts", Parts)), $"Loader package part {i + 1}", log);
+                }
+                catch (Progress.Stalled)
+                {
+                    throw new UserError("err.loaderStalled", "The download of the loader package stopped: nothing arrived for 30 seconds. Check the connection and try again.");
+                }
             }
         }
         if (Hash(temp) != Sha256)

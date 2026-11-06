@@ -20,6 +20,10 @@ public class MainActivity : Activity, IPatchLogger
 
     private TextView status = null!, logView = null!;
     private ScrollView logScroll = null!;
+    // the progress bar at the bottom of the console (0.4.3): hidden while nothing long is running
+    private LinearLayout progressBox = null!;
+    private TextView progressLabel = null!, progressDetail = null!;
+    private ProgressBar progressBar = null!;
     // The button of the job now running (patch, from-backup or app update). While Android's confirmation is up it reads
     // "Continue: ..." and is the one button left enabled: pressing it shows the confirmation again (after a tap outside
     // it closed it). As soon as Android answers it goes back to its own label and is disabled until the job ends.
@@ -194,10 +198,37 @@ public class MainActivity : Activity, IPatchLogger
         logView.SetTextIsSelectable(true);
         logScroll = new ScrollView(this);
         logScroll.AddView(logView);
-        logScroll.SetBackgroundColor(Color.ParseColor("#0E0F11"));
         logScroll.SetPadding(Dp(8), Dp(8), Dp(8), Dp(8));
+
+        progressLabel = Text("", 12, "#D8DEE4");
+        progressDetail = Text("", 11, "#9AA0A6");
+        progressDetail.Typeface = Typeface.Monospace;
+        progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
+        progressBar.ProgressTintList = Android.Content.Res.ColorStateList.ValueOf(Color.ParseColor("#C9A44C"));
+        progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
+        progressBox.SetPadding(Dp(8), Dp(4), Dp(8), Dp(8));
+        progressBox.SetBackgroundColor(Color.ParseColor("#17191C"));
+        var labels = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+        labels.AddView(progressLabel, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+        labels.AddView(progressDetail);
+        progressBox.AddView(labels);
+        progressBox.AddView(progressBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+        Progress.Sink = (label, fraction, detail) => RunOnUiThread(() =>
+        {
+            progressLabel.Text = label;
+            progressDetail.Text = detail;
+            progressBar.Indeterminate = fraction < 0;
+            if (fraction >= 0) progressBar.Progress = (int)(Math.Clamp(fraction, 0, 1) * 1000);
+            progressBox.Visibility = ViewStates.Visible;
+        });
+        Progress.HideSink = () => RunOnUiThread(() => progressBox.Visibility = ViewStates.Gone);
+
+        var console = new LinearLayout(this) { Orientation = Orientation.Vertical };
+        console.SetBackgroundColor(Color.ParseColor("#0E0F11"));
+        console.AddView(logScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1f));
+        console.AddView(progressBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
         var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1.2f) { TopMargin = Dp(12) };
-        root.AddView(logScroll, lp);
+        root.AddView(console, lp);
         SetContentView(root);
     }
 
@@ -705,6 +736,7 @@ public class MainActivity : Activity, IPatchLogger
         catch (Exception e) { Log("ERROR " + e); Say(Loc.T("err.unexpected", "Something went wrong: {error}\n\nThe log at the bottom has the details; \"Share logs\" sends it.", ("error", e.Message))); }
         finally
         {
+            Progress.Hide();
             busy = false;
             ShowContinue(false);
             jobButton = null;

@@ -13,6 +13,9 @@ public class Patcher(PatchArguments arguments, IPatchLogger logger)
     public IPatchLogger Logger { get; internal set; } = logger;
     public PatchInfo Info { get; internal set; } = new(arguments);
 
+    /// <summary>WF Revival: called before each patch step with its number (1-based) and the number of steps, for a progress bar.</summary>
+    public Action<int, int>? StepStarted { get; set; }
+
     public bool Run()
     {
         bool success = true;
@@ -63,8 +66,10 @@ public class Patcher(PatchArguments arguments, IPatchLogger logger)
                 new CleanUp(),
             ];
 
-            foreach (IPatchStep step in steps)
+            for (int i = 0; i < steps.Length; i++)
             {
+                IPatchStep step = steps[i];
+                StepStarted?.Invoke(i + 1, steps.Length);
                 bool status = step.Run(this);
                 if (!status)
                     throw new Exception($"Failed to complete patching.");
