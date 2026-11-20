@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- WF Revival PC Patcher: patches the player's own Warpforge backup on a PC (for Husk on iPhone, or to copy to a
+       device), with the same patching core and loader package as the phone app (WarpforgePatcher). GPL-3.0 like the
+       core. A console program for now (owner's Husk test); see README-WFRevivalPcPatcher.md. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WFRevivalPcPatcher</AssemblyName>
+    <RootNamespace>WFRevivalPcPatcher</RootNamespace>
+    <Version>0.1.0</Version>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/MelonLoader.Installer.Core.csproj" />
+    <!-- the owner's mod signature check, shared with the phone app -->
+    <Compile Include="../WarpforgePatcher/ModSignature.cs" Link="Shared/ModSignature.cs" />
+    <Compile Include="../WarpforgePatcher/Ed25519.cs" Link="Shared/Ed25519.cs" />
+    <EmbeddedResource Include="../WarpforgePatcher/Splash/launch-splash.png" LogicalName="launch-splash.png" />
+  </ItemGroup>
+</Project>
